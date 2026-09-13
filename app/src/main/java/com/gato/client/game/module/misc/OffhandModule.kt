@@ -93,7 +93,7 @@ class OffhandModule : Module("Offhand", ModuleCategory.Misc) {
     private var replayDelayTicks = 0
 
     private fun itemName(item: ItemData): String? =
-    item.definition?.identifier ?: itemPalette[item.runtimeId]?.identifier
+        item.definition?.identifier
 
     /**
      * Replays the user's own manual offhand move: an ItemStackRequest with the
