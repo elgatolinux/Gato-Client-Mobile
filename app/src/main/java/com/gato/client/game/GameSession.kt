@@ -36,9 +36,10 @@ class GameSession(val gatoRelaySession: GatoRelaySession) : ComposedPacketHandle
 
         for (module in ModuleManager.modules) {
             module.beforePacketBound(interceptablePacket)
-            if (interceptablePacket.isIntercepted) {
-                return true
-            }
+        }
+
+        if (interceptablePacket.isIntercepted) {
+            return true
         }
 
        // displayClientMessage("[Gato Client Mobile] $versionName", TextPacket.Type.TIP)
