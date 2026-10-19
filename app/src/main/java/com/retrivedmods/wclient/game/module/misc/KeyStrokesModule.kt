@@ -64,6 +64,12 @@ class KeyStrokesModule : Module("keystrokes", ModuleCategory.Misc) {
         }
     }
 
+    override fun onDisconnect(reason: String) {
+        if (isSessionCreated) {
+            KeyStrokesOverlay.setOverlayEnabled(false)
+        }
+    }
+
     private fun updateOverlaySettings() {
         KeyStrokesOverlay.setPosition(positionX, positionY)
         KeyStrokesOverlay.setKeySize(keySize)
@@ -110,6 +116,7 @@ class KeyStrokesModule : Module("keystrokes", ModuleCategory.Misc) {
                     }
 
                     scope.launch {
+                        updateOverlaySettings()
                         KeyStrokesOverlay.setKeyState("W", keys.w)
                         KeyStrokesOverlay.setKeyState("A", keys.a)
                         KeyStrokesOverlay.setKeyState("S", keys.s)

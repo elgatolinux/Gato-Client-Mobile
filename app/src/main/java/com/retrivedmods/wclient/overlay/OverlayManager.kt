@@ -12,10 +12,9 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.retrivedmods.wclient.game.ModuleManager
-import com.retrivedmods.wclient.ui.theme.WClientTheme
 import com.retrivedmods.wclient.overlay.gui.classic.OverlayButton
 import com.retrivedmods.wclient.overlay.gui.classic.OverlayShortcutButton
-
+import com.retrivedmods.wclient.ui.theme.WClientTheme
 import kotlinx.coroutines.launch
 
 @SuppressLint("StaticFieldLeak")
@@ -31,48 +30,31 @@ object OverlayManager {
         private set
 
     private var currentOverlayButton: OverlayWindow? = null
-    private var currentClickGUI: OverlayWindow? = null
-    private var currentClickGUIOverlay: OverlayWindow? = null
-
-    private fun getGUITheme(context: Context): GUITheme {
-        val sharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-        return try {
-            GUITheme.valueOf(
-                sharedPreferences.getString("gui_theme", "CLASSIC") ?: "CLASSIC"
-            )
-        } catch (_: Exception) {
-            GUITheme.CLASSIC
-        }
-    }
 
     private fun initializeOverlays(context: Context) {
-        val theme = getGUITheme(context)
-
+        GuiSettingsManager.ensureLoaded(context)
 
         overlayWindows.clear()
-        currentOverlayButton = null
-        currentClickGUI = null
-        currentClickGUIOverlay = null
-
-
-        when (theme) {
-            GUITheme.CLASSIC -> {
-                currentOverlayButton = OverlayButton()
-                overlayWindows.addAll(
-                    ModuleManager
-                        .modules
-                        .filter { it.isShortcutDisplayed }
-                        .map { it.overlayShortcutButton }
-                )
-            }
+        currentOverlayButton = OverlayButton().apply {
+            layoutParams.alpha = GuiSettingsManager.overlayOpacity
         }
 
-
+        val shortcuts = ModuleManager
+            .modules
+            .filter { it.isShortcutDisplayed }
+            .map {
+                it.overlayShortcutButton.apply {
+                    layoutParams.alpha = GuiSettingsManager.shortcutOpacity
+                }
+            }
+        overlayWindows.addAll(shortcuts)
         currentOverlayButton?.let { overlayWindows.add(it) }
     }
 
     fun showOverlayWindow(overlayWindow: OverlayWindow) {
-        overlayWindows.add(overlayWindow)
+        if (!overlayWindows.contains(overlayWindow)) {
+            overlayWindows.add(overlayWindow)
+        }
 
         val context = currentContext
         if (isShowing && context != null) {
@@ -91,19 +73,10 @@ object OverlayManager {
 
     fun show(context: Context) {
         currentContext = context
-
-
         initializeOverlays(context)
 
-        val theme = getGUITheme(context)
-        when (theme) {
-
-            GUITheme.CLASSIC -> {
-
-                overlayWindows.forEach {
-                    showOverlayWindow(context, it)
-                }
-            }
+        overlayWindows.toList().forEach {
+            showOverlayWindow(context, it)
         }
 
         isShowing = true
@@ -112,15 +85,8 @@ object OverlayManager {
     fun dismiss() {
         val context = currentContext
         if (context != null) {
-            val theme = getGUITheme(context)
-            when (theme) {
-
-                GUITheme.CLASSIC -> {
-
-                    overlayWindows.forEach {
-                        dismissOverlayWindow(context, it)
-                    }
-                }
+            overlayWindows.toList().forEach {
+                dismissOverlayWindow(context, it)
             }
             isShowing = false
         }
@@ -155,7 +121,6 @@ object OverlayManager {
         try {
             windowManager.addView(composeView, layoutParams)
         } catch (_: Exception) {
-
         }
     }
 
@@ -166,7 +131,6 @@ object OverlayManager {
         try {
             windowManager.removeView(composeView)
         } catch (_: Exception) {
-
         }
     }
 
@@ -174,8 +138,10 @@ object OverlayManager {
         overlayWindows.find { it is OverlayButton }?.let { button ->
             button.layoutParams.alpha = opacity
             currentContext?.let { context ->
-                (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
-                    .updateViewLayout(button.composeView, button.layoutParams)
+                runCatching {
+                    (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
+                        .updateViewLayout(button.composeView, button.layoutParams)
+                }
             }
         }
     }
@@ -184,11 +150,11 @@ object OverlayManager {
         overlayWindows.filter { it is OverlayShortcutButton }.forEach { button ->
             button.layoutParams.alpha = opacity
             currentContext?.let { context ->
-                (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
-                    .updateViewLayout(button.composeView, button.layoutParams)
+                runCatching {
+                    (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
+                        .updateViewLayout(button.composeView, button.layoutParams)
+                }
             }
         }
     }
-
-
 }

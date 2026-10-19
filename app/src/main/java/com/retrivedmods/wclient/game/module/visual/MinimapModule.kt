@@ -54,6 +54,7 @@ class MinimapModule : Module("minimap", ModuleCategory.Visual) {
 
     override fun onDisconnect(reason: String) {
         if (isSessionCreated) {
+            MinimapOverlay.setOverlayEnabled(false)
             MinimapOverlay.setEntities(emptyList())
         }
     }
@@ -65,6 +66,7 @@ class MinimapModule : Module("minimap", ModuleCategory.Visual) {
         MinimapOverlay.setShowNames(showNames)
         MinimapOverlay.setShowDistance(showDistance)
         MinimapOverlay.setShowCoordinates(showCoordinates)
+        MinimapOverlay.setTransparentBackground(transparentBackground)
     }
 
     override fun beforePacketBound(interceptablePacket: InterceptablePacket) {
@@ -76,7 +78,7 @@ class MinimapModule : Module("minimap", ModuleCategory.Visual) {
             val position = packet.position
             MinimapOverlay.setCenter(position.x, position.z)
 
-            val yawRadians = (packet.rotation.y * PI / 180).toFloat()
+            val yawRadians = if (followPlayer) (packet.rotation.y * PI / 180).toFloat() else 0f
             MinimapOverlay.setPlayerRotation(yawRadians)
 
             updateEntityPositions()

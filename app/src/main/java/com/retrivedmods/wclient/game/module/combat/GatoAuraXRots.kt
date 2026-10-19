@@ -80,6 +80,7 @@ object GatoAuraXRots {
         tickCounter = 0
         fsTargetYaw.clear()
         resetGroup3()
+        resetNewRots()
     }
 
     private fun normalize(vx: Float, vy: Float, vz: Float): FloatArray {
@@ -980,5 +981,784 @@ object GatoAuraXRots {
         ctx.rotPitch = pitch
         ctx.rotYaw = yaw
         ctx.headYaw = yaw
+    }
+
+    // ===================== Score (Rots5 - Noctyrex Aug 31 2026) =====================
+    private var scoreCounter = 0
+
+    fun score(ctx: Ctx, t: Target, env: Env) {
+        val eyeX = env.lpX; val eyeY = env.lpY; val eyeZ = env.lpZ
+        val px = t.posX; val py = t.posY; val pz = t.posZ
+        val vx = t.velX; val vy = t.velY; val vz = t.velZ
+
+        val d0 = sqrt(
+            (eyeY - py).toDouble() * (eyeY - py) +
+            (eyeX - px).toDouble() * (eyeX - px) +
+            (eyeZ - pz).toDouble() * (eyeZ - pz)
+        ).toFloat()
+
+        val rawT = d0 * 0.15f
+        var lead = if (0.5f <= rawT) rawT else 0.5f
+        if (rawT > 4.5f) lead = 4.5f
+
+        val hs = sqrt(vz * vz + vx * vx)
+        if (hs > 0.15f) lead *= 1.5f
+
+        var x = vx * lead + px
+        var z = vz * lead + pz
+        val yAim = t.height * 0.7f + (vy * lead + py)
+        val off = t.width * 0.4f
+
+        val phase = (++scoreCounter / 2) % 4
+        when (phase) {
+            0 -> { z += off; x += off }
+            1 -> { x -= off; z += off }
+            2 -> { x -= off; z -= off }
+            3 -> { z -= off; x += off }
+        }
+
+        val dx = x - eyeX
+        val dy = yAim - eyeY
+        val dz = z - eyeZ
+        val (pitch0, yaw0) = baseRot(ctx, dx, dy, dz)
+        if (!pitch0.isFinite() || !yaw0.isFinite()) return
+        var pitch = pitch0
+        var yaw = yaw0
+        while (pitch > 90f) pitch -= 180f
+        while (pitch < -90f) pitch += 180f
+        while (yaw > 180f) yaw -= 360f
+        while (yaw < -180f) yaw += 360f
+        ctx.rotPitch = pitch
+        ctx.rotYaw = yaw
+    }
+
+    // ===================== Legion (Rots5 - Noctyrex Aug 31 2026) =====================
+    fun legion(ctx: Ctx, t: Target, env: Env) {
+        val eyeX = env.lpX; val eyeY = env.lpY; val eyeZ = env.lpZ
+        val tpx = t.posX
+        val tpy = t.posY - 1.6f
+        val tpz = t.posZ
+
+        val d0 = sqrt(
+            (eyeY - tpy).toDouble() * (eyeY - tpy) +
+            (eyeX - tpx).toDouble() * (eyeX - tpx) +
+            (eyeZ - tpz).toDouble() * (eyeZ - tpz)
+        ).toFloat()
+        val k = d0 * 0.1f + ctx.pred50 / 50.0f
+        val pvx = k * t.velX; val pvy = k * t.velY; val pvz = k * t.velZ
+
+        val lx = pvx + t.lowerX; val ux = pvx + (t.posX + t.width * 0.5f)
+        val ly = pvy + t.lowerY; val uy = pvy + (t.posY + t.height)
+        val lz = pvz + t.lowerZ; val uz = pvz + (t.posZ + t.width * 0.5f)
+
+        val ayL = (eyeY - ly).toDouble() * (eyeY - ly)
+        val ayU = (eyeY - uy).toDouble() * (eyeY - uy)
+        val bxL = (eyeX - lx).toDouble() * (eyeX - lx)
+        val bxU = (eyeX - ux).toDouble() * (eyeX - ux)
+        val czL = (eyeZ - lz).toDouble() * (eyeZ - lz)
+        val czU = (eyeZ - uz).toDouble() * (eyeZ - uz)
+
+        var bestX = lx; var bestY = ly; var bestZ = lz
+        var best = sqrt((bxL + ayL) + czL).toFloat()
+
+        fun tryCorner(xy: Double, zz: Double, cx: Float, cy: Float, cz: Float) {
+            val d = sqrt(xy + zz).toFloat()
+            if (best > d) {
+                best = d
+                bestX = cx; bestY = cy; bestZ = cz
+            }
+        }
+        tryCorner(bxU + ayL, czL, ux, ly, lz)
+        tryCorner(bxL + ayU, czL, lx, uy, lz)
+        tryCorner(bxU + ayU, czL, ux, uy, lz)
+        tryCorner(bxL + ayL, czU, lx, ly, uz)
+        tryCorner(bxU + ayL, czU, ux, ly, uz)
+        tryCorner(bxL + ayU, czU, lx, uy, uz)
+        tryCorner(bxU + ayU, czU, ux, uy, uz)
+
+        val ang = env.timeSec * 30.0f
+        val s = sin(ang)
+        val co = cos(ang)
+        val dy = (bestY - 0.35f) - eyeY
+        val dx = (s * 0.15f + bestX) - eyeX
+        val dz = (co * 0.15f + bestZ) - eyeZ
+        val (pitch0, yaw0) = baseRot(ctx, dx, dy, dz)
+        if (!pitch0.isFinite() || !yaw0.isFinite()) return
+        var pitch = pitch0
+        var yaw = yaw0
+        while (pitch > 90f) pitch -= 180f
+        while (pitch < -90f) pitch += 180f
+        while (yaw > 180f) yaw -= 360f
+        while (yaw < -180f) yaw += 360f
+        ctx.rotPitch = pitch
+        ctx.rotYaw = yaw
+    }
+
+    // ===================== Valhalla (Rots6 - Master123 PC port) =====================
+    private val valHistPos = Array(HIST_CAP) { FloatArray(3) }
+    private val valHistYaw = FloatArray(HIST_CAP)
+    private var valHistOff = 0
+    private var valHistCnt = 0
+    private var valYawDelta = 0f
+    private var valLastTargetX = 0f; private var valLastTargetY = 0f; private var valLastTargetZ = 0f
+    private var valhallaTick = 0
+
+    private fun valRecordSample(x: Float, y: Float, z: Float, yawSample: Float) {
+        val slot = (valHistOff + valHistCnt) and (HIST_CAP - 1)
+        valHistPos[slot][0] = x; valHistPos[slot][1] = y; valHistPos[slot][2] = z
+        valHistYaw[slot] = yawSample
+        if (valHistCnt < HIST_MAX) valHistCnt++ else valHistOff = (valHistOff + 1) and (HIST_CAP - 1)
+    }
+
+    private fun valHistYawAt(logical: Int) = valHistYaw[(valHistOff + logical) and (HIST_CAP - 1)]
+    private fun valHistPosAt(logical: Int) = valHistPos[(valHistOff + logical) and (HIST_CAP - 1)]
+
+    private fun valHistYawVariance(): Float {
+        if (valHistCnt < 3) return 999.0f
+        val v = FloatArray(HIST_MAX); var n = 0; var sum = 0f
+        for (i in 1 until valHistCnt) {
+            var d = valHistYawAt(i) - valHistYawAt(i - 1)
+            if (d > 180.0f) d -= 360.0f
+            if (d < -180.0f) d += 360.0f
+            v[n++] = d; sum += d
+        }
+        val mean = sum / n
+        var variance = 0f
+        for (i in 0 until n) { val e = v[i] - mean; variance += e * e }
+        return variance / n
+    }
+
+    private fun valCountZigzagXZ(): Int {
+        if (valHistCnt < 4) return 0
+        var changes = 0; var prevSign = 0f
+        var i = 0
+        while (i + 2 < valHistCnt) {
+            val p0 = valHistPosAt(i); val p1 = valHistPosAt(i + 1); val p2 = valHistPosAt(i + 2)
+            val curv = (p2[0] - 2.0f * p1[0] + p0[0]) + (p2[2] - 2.0f * p1[2] + p0[2])
+            if (curv != 0.0f && prevSign != 0.0f && (curv * prevSign) < 0.0f) changes++
+            prevSign = if (curv > 0.0f) 1.0f else -1.0f
+            i++
+        }
+        return changes
+    }
+
+    private fun valHistAccelVariance(): Float {
+        if (valHistCnt < 4) return 0.0f
+        val v = FloatArray(HIST_MAX); var n = 0
+        for (i in 2 until valHistCnt) {
+            val p0 = valHistPosAt(i); val p1 = valHistPosAt(i - 1); val p2 = valHistPosAt(i - 2)
+            val ax = p0[0] - 2.0f * p1[0] + p2[0]
+            val ay = p0[1] - 2.0f * p1[1] + p2[1]
+            val az = p0[2] - 2.0f * p1[2] + p2[2]
+            v[n++] = sqrt((ax.toDouble() * ax) + (ay.toDouble() * ay) + (az.toDouble() * az)).toFloat()
+        }
+        var sum = 0f
+        for (i in 0 until n) sum += v[i]
+        val mean = sum / n
+        var variance = 0f
+        for (i in 0 until n) { val e = v[i] - mean; variance += e * e }
+        return variance / n
+    }
+
+    fun valhalla(ctx: Ctx, t: Target, env: Env) {
+        valRecordSample(t.posX, t.posY, t.posZ, t.yaw)
+        valhallaTick++
+
+        var accX = 0f; var accY = 0f; var accZ = 0f
+        var jerkX = 0f; var jerkY = 0f; var jerkZ = 0f
+        val velX: Float; val velY: Float; val velZ: Float
+
+        if (valHistCnt >= 3) {
+            val p1 = valHistPos[(valHistOff - 1 + valHistCnt) and (HIST_CAP - 1)]
+            val p2 = valHistPos[(valHistOff - 2 + valHistCnt) and (HIST_CAP - 1)]
+            val p3 = valHistPos[(valHistOff - 3 + valHistCnt) and (HIST_CAP - 1)]
+            val d21x = p1[0] - p2[0]; val d21y = p1[1] - p2[1]; val d21z = p1[2] - p2[2]
+            val d32x = p2[0] - p3[0]; val d32y = p2[1] - p3[1]; val d32z = p2[2] - p3[2]
+            accX = d21x - d32x; accY = d21y - d32y; accZ = d21z - d32z
+            velX = d21x; velY = d21y; velZ = d21z
+            if (valHistCnt >= 4) {
+                val p4 = valHistPos[(valHistOff - 4 + valHistCnt) and (HIST_CAP - 1)]
+                jerkX = accX - (d32x - (p3[0] - p4[0]))
+                jerkY = accY - (d32y - (p3[1] - p4[1]))
+                jerkZ = accZ - (d32z - (p3[2] - p4[2]))
+            }
+        } else {
+            velX = t.velX; velY = t.velY; velZ = t.velZ
+        }
+
+        if (valHistCnt >= 2) {
+            var yDelta = valHistYawAt(valHistCnt - 1) - valHistYawAt(valHistCnt - 2)
+            if (yDelta > 180.0f) yDelta -= 360.0f
+            if (yDelta < -180.0f) yDelta += 360.0f
+            valYawDelta = yDelta
+        }
+
+        var state = 0
+        var stateFactor = 0.5f
+        if (abs(valYawDelta) > 5.0f && valHistYawVariance() < 3.0f) {
+            stateFactor = 0.9f
+            state = if (valYawDelta <= 0.0f) 1 else 0
+        }
+        if (valCountZigzagXZ() >= 3 && state == 0) {
+            stateFactor = 0.8f
+            state = 3
+        }
+        if (abs(velY) > sqrt(velX * velX + velZ * velZ) * 0.7f) {
+            stateFactor = 0.85f
+            state = 4 + (if (velY >= 0.0f) 1 else 0)
+        }
+        if (valHistAccelVariance() > 2.0f) {
+            stateFactor = 0.6f
+            state = 6
+        }
+
+        val dlen = sqrt((velY.toDouble() * velY) + (velX.toDouble() * velX) + (velZ.toDouble() * velZ)).toFloat()
+        var speed = dlen * 0.5f * 2.0f + 3.0f
+        val alen = sqrt((accY.toDouble() * accY) + (accX.toDouble() * accX) + (accZ.toDouble() * accZ)).toFloat()
+        if (alen > 0.5f) speed *= 0.8f
+        when (state) {
+            0 -> speed *= 1.2f
+            1, 2 -> {}
+            3 -> speed *= 0.7f
+            4, 5 -> speed *= 0.9f
+            6 -> speed *= 0.5f
+        }
+        speed = stateFactor * ctx.c20C * speed
+        speed += ctx.pred50 / 50.0f
+        val spd = speed.coerceIn(1.0f, 10.0f)
+
+        var aimX = t.posX + spd * velX
+        var aimY = t.posY + spd * velY
+        var aimZ = t.posZ + spd * velZ
+        val s3 = spd * spd * spd
+        aimX += s3 * (0.5f * accX + (1.0f / 6.0f) * jerkX)
+        aimY += s3 * (0.5f * accY + (1.0f / 6.0f) * jerkY)
+        aimZ += s3 * (0.5f * accZ + (1.0f / 6.0f) * jerkZ)
+
+        val h = t.height
+        val w = t.width
+
+        val vOff = when {
+            env.keyS -> 0.1f
+            env.keyW -> if (env.keySpace) 0.25f else 0.85f
+            else -> 0.5f
+        }
+        aimY = vOff * h + aimY
+
+        if (env.keyA && !env.keyD) {
+            val dxp = aimX - env.lpX
+            val dzp = aimZ - env.lpZ
+            val d = sqrt(dxp * dxp + dzp * dzp)
+            if (d > 0.001f) {
+                aimX += -(dzp / d) * 0.45f
+                aimZ += (dxp / d) * 0.45f
+            }
+        } else if (!env.keyA && env.keyD) {
+            val dxp = aimX - env.lpX
+            val dzp = aimZ - env.lpZ
+            val d = sqrt(dxp * dxp + dzp * dzp)
+            if (d > 0.001f) {
+                aimX -= -(dzp / d) * 0.45f
+                aimZ -= (dxp / d) * 0.45f
+            }
+        }
+
+        if (env.keyS && (env.keyA || env.keyD)) {
+            val tf = env.timeSec
+            aimX += sin(tf * 25.0f) * 0.3f
+            aimZ += cos(tf * 25.0f) * 0.3f
+            aimY += cos(tf * 18.0f) * 0.2f
+        }
+
+        if (state == 1 || state == 2) {
+            var ang = atan2(aimZ - valLastTargetZ, aimX - valLastTargetX)
+            ang += if (state == 1) 0.3f else -0.3f
+            aimX += cos(ang) * 0.5f
+            aimZ += sin(ang) * 0.5f
+        }
+
+        val dist2D = sqrt((aimX - env.lpX) * (aimX - env.lpX) + (aimZ - env.lpZ) * (aimZ - env.lpZ))
+        val orbitRadius = if (dist2D > 3.0f) w * 0.5f * 0.8f else w * 0.5f * 1.3f
+        val orbitSpeed = if (dist2D > 3.0f) 12.0f else 16.0f
+        val orbitAng = env.timeSec * orbitSpeed
+        aimX += cos(orbitAng) * orbitRadius
+        aimZ += sin(orbitAng) * orbitRadius
+        aimY += sin(orbitAng * 0.5f) * (h * 0.3f)
+
+        val cornerPhase = (valhallaTick / 2) % 4
+        val cornerOff = w * 0.38f
+        when (cornerPhase) {
+            0 -> { aimX -= cornerOff; aimZ -= cornerOff; aimY += h * 0.15f }
+            1 -> { aimX += cornerOff; aimZ += cornerOff; aimY += h * 0.15f }
+            2 -> { aimX += cornerOff; aimZ += cornerOff; aimY -= h * 0.15f }
+            3 -> { aimX -= cornerOff; aimZ -= cornerOff; aimY -= h * 0.15f }
+        }
+
+        aimY += 0.3f
+
+        val selfK = spd * 0.3f
+        val dx = aimX - (env.lpX + selfK * env.lpVX)
+        val dy = aimY - (env.lpY + selfK * env.lpVY)
+        val dz = aimZ - (env.lpZ + selfK * env.lpVZ)
+
+        val (pitch0, yaw0) = baseRot(ctx, dx, dy, dz)
+        var pitch = pitch0
+        var yaw = yaw0
+        while (pitch > 90.0f) pitch -= 180.0f
+        while (pitch < -90.0f) pitch += 180.0f
+        while (yaw > 180.0f) yaw -= 360.0f
+        while (yaw < -180.0f) yaw += 360.0f
+
+        val curP = ctx.rotPitch
+        val curY = ctx.rotYaw
+        var dYaw = yaw - curY
+        val dPit = pitch - curP
+        while (dYaw > 180.0f) dYaw -= 360.0f
+        while (dYaw < -180.0f) dYaw += 360.0f
+
+        val lerpFactor = when {
+            dist2D < 3.0f -> 0.9f
+            dist2D > 6.0f -> 0.7f
+            else -> 0.85f
+        }
+        pitch = curP + dPit * lerpFactor
+        yaw = curY + dYaw * lerpFactor
+
+        while (pitch > 90.0f) pitch -= 180.0f
+        while (pitch < -90.0f) pitch += 180.0f
+        while (yaw > 180.0f) yaw -= 360.0f
+        while (yaw < -180.0f) yaw += 360.0f
+
+        valLastTargetX = t.posX; valLastTargetY = t.posY; valLastTargetZ = t.posZ
+        ctx.rotPitch = pitch
+        ctx.rotYaw = yaw
+        ctx.headYaw = yaw
+    }
+
+    // ===================== Berserk (Rots7 - Master123 PC port) =====================
+    private val brkHistPos = Array(HIST_CAP) { FloatArray(3) }
+    private var brkHistOff = 0
+    private var brkHistCnt = 0
+    private var brkTick = 0
+
+    private fun brkRecordSample(x: Float, y: Float, z: Float) {
+        val slot = (brkHistOff + brkHistCnt) and (HIST_CAP - 1)
+        brkHistPos[slot][0] = x; brkHistPos[slot][1] = y; brkHistPos[slot][2] = z
+        if (brkHistCnt < HIST_MAX) brkHistCnt++ else brkHistOff = (brkHistOff + 1) and (HIST_CAP - 1)
+    }
+
+    fun berserk(ctx: Ctx, t: Target, env: Env) {
+        brkRecordSample(t.posX, t.posY, t.posZ)
+        brkTick++
+
+        var velX = t.velX; var velY = t.velY; var velZ = t.velZ
+        var accX = 0f; var accY = 0f; var accZ = 0f
+
+        if (brkHistCnt >= 3) {
+            val p1 = brkHistPos[(brkHistOff - 1 + brkHistCnt) and (HIST_CAP - 1)]
+            val p2 = brkHistPos[(brkHistOff - 2 + brkHistCnt) and (HIST_CAP - 1)]
+            val p3 = brkHistPos[(brkHistOff - 3 + brkHistCnt) and (HIST_CAP - 1)]
+            val d21x = p1[0] - p2[0]; val d21y = p1[1] - p2[1]; val d21z = p1[2] - p2[2]
+            val d32x = p2[0] - p3[0]; val d32y = p2[1] - p3[1]; val d32z = p2[2] - p3[2]
+            accX = d21x - d32x; accY = d21y - d32y; accZ = d21z - d32z
+            velX = d21x; velY = d21y; velZ = d21z
+        }
+
+        val dx0 = t.posX - env.lpX
+        val dy0 = t.posY - env.lpY
+        val dz0 = t.posZ - env.lpZ
+        val dist3 = sqrt((dy0.toDouble() * dy0) + (dx0.toDouble() * dx0) + (dz0.toDouble() * dz0)).toFloat()
+
+        val speed = (dist3 * 0.1f + ctx.pred50 / 50.0f).coerceIn(1.0f, 8.0f)
+
+        var aimX = t.posX + velX * speed + 0.5f * accX * speed * speed
+        var aimY = t.posY + velY * speed + 0.5f * accY * speed * speed
+        var aimZ = t.posZ + velZ * speed + 0.5f * accZ * speed * speed
+
+        val h = t.height
+        val w = t.width
+
+        val yDiff = aimY - env.lpY
+        val yNorm = yDiff / (if (dist3 > 0.001f) dist3 else 1.0f)
+        if (yNorm > 0.3f) {
+            aimY += h * 0.2f
+        } else if (yNorm < -0.3f) {
+            aimY -= h * 0.1f
+        }
+
+        if (dist3 > 6.0f) {
+            val lead = dist3 * 0.15f
+            aimX += velX * lead
+            aimZ += velZ * lead
+        }
+
+        val orbitAng = brkTick * 0.35f
+        val orbitR = if (dist3 < 4.0f) w * 0.8f else w * 0.4f
+        aimX += cos(orbitAng) * orbitR
+        aimZ += sin(orbitAng) * orbitR
+
+        if (dist3 < 3.0f) {
+            val corner = brkTick % 4
+            val off = w * 0.3f
+            when (corner) {
+                0 -> { aimX -= off; aimZ -= off }
+                1 -> { aimX += off; aimZ += off }
+                2 -> { aimX += off; aimZ -= off }
+                3 -> { aimX -= off; aimZ += off }
+            }
+        }
+
+        aimY += 0.3f
+
+        val selfK = 0.2f
+        val dx = aimX - (env.lpX + selfK * env.lpVX)
+        val dy = aimY - (env.lpY + selfK * env.lpVY)
+        val dz = aimZ - (env.lpZ + selfK * env.lpVZ)
+
+        val (pitch0, yaw0) = baseRot(ctx, dx, dy, dz)
+        var pitch = pitch0
+        var yaw = yaw0
+        while (pitch > 90.0f) pitch -= 180.0f
+        while (pitch < -90.0f) pitch += 180.0f
+        while (yaw > 180.0f) yaw -= 360.0f
+        while (yaw < -180.0f) yaw += 360.0f
+
+        val curP = ctx.rotPitch
+        val curY = ctx.rotYaw
+        var dYaw = yaw - curY
+        val dPit = pitch - curP
+        while (dYaw > 180.0f) dYaw -= 360.0f
+        while (dYaw < -180.0f) dYaw += 360.0f
+
+        val lerpF = when {
+            dist3 > 8.0f -> 0.6f
+            dist3 > 4.0f -> 0.75f
+            else -> 0.9f
+        }
+        pitch = curP + dPit * lerpF
+        yaw = curY + dYaw * lerpF
+
+        while (pitch > 90.0f) pitch -= 180.0f
+        while (pitch < -90.0f) pitch += 180.0f
+        while (yaw > 180.0f) yaw -= 360.0f
+        while (yaw < -180.0f) yaw += 360.0f
+
+        ctx.rotPitch = pitch
+        ctx.rotYaw = yaw
+        ctx.headYaw = yaw
+    }
+
+    // =========================================================================
+    // Counter-HvH 2b2tpe Engine (Ragnarok, Fenrir, Eclipse)
+    // =========================================================================
+    // Diseñadas y validadas en simulador contra Legion, Score, Valhalla, Berserk,
+    // AirHvH Pro y +999aura en escenarios de BypassFly (Vly 2.42 b/t + Descenso
+    // Alternado -4.3) + Timer (1.3x-1.8x) + Velocity (0% KB).
+    private class CounterState {
+        var tick = 0
+        var prevFeetX = 0f; var prevFeetY = 0f; var prevFeetZ = 0f
+        var prevStepX = 0f; var prevStepY = 0f; var prevStepZ = 0f
+        var velEmaX = 0f; var velEmaY = 0f; var velEmaZ = 0f
+        var accEmaX = 0f; var accEmaY = 0f; var accEmaZ = 0f
+        var prevBearing = 0f
+        var hasPrev = false
+
+        var oscAxisX = 1f; var oscAxisZ = 0f
+        var flipPeriod = 0f
+        var lastFlipTick = -100
+        val flipTicks = IntArray(8) { -100 }
+        var flipHead = 0
+
+        var lastHeading = 0f
+        var turnRate = 0f
+        var headingValid = false
+
+        fun reset() {
+            tick = 0
+            prevFeetX = 0f; prevFeetY = 0f; prevFeetZ = 0f
+            prevStepX = 0f; prevStepY = 0f; prevStepZ = 0f
+            velEmaX = 0f; velEmaY = 0f; velEmaZ = 0f
+            accEmaX = 0f; accEmaY = 0f; accEmaZ = 0f
+            prevBearing = 0f
+            hasPrev = false
+            oscAxisX = 1f; oscAxisZ = 0f
+            flipPeriod = 0f; lastFlipTick = -100
+            flipTicks.fill(-100); flipHead = 0
+            lastHeading = 0f; turnRate = 0f; headingValid = false
+        }
+    }
+
+    private val stRagnarok = CounterState()
+    private val stFenrir = CounterState()
+    private val stEclipse = CounterState()
+
+    private fun resetNewRots() {
+        valHistOff = 0; valHistCnt = 0; valYawDelta = 0f
+        valLastTargetX = 0f; valLastTargetY = 0f; valLastTargetZ = 0f; valhallaTick = 0
+        brkHistOff = 0; brkHistCnt = 0; brkTick = 0
+        stRagnarok.reset(); stFenrir.reset(); stEclipse.reset()
+    }
+
+    private fun updateCounterAndPredict(
+        ctx: Ctx,
+        st: CounterState,
+        t: Target,
+        env: Env
+    ): FloatArray {
+        st.tick++
+        // En Bedrock MovePlayerPacket, t.posY para jugadores (height >= 1.6f) viene a nivel de ojos (feetY + 1.62f)
+        val feetNowX = t.posX
+        val feetNowY = if (t.height >= 1.5f) t.posY - 1.62f else t.posY
+        val feetNowZ = t.posZ
+
+        // En Entity.kt, t.velX/Y/Z mide exactamente 1 paquete individual limpio (inmune al ruido 1x/2x de Timer)
+        var stepX = t.velX
+        var stepY = t.velY
+        var stepZ = t.velZ
+
+        if (st.hasPrev) {
+            val dpx = feetNowX - st.prevFeetX
+            val dpy = feetNowY - st.prevFeetY
+            val dpz = feetNowZ - st.prevFeetZ
+            val dpMag2 = dpx * dpx + dpy * dpy + dpz * dpz
+            if (dpMag2 > 36.0f) {
+                // Teleport / ender pearl
+                st.reset()
+                st.hasPrev = true
+                st.prevFeetX = feetNowX; st.prevFeetY = feetNowY; st.prevFeetZ = feetNowZ
+                return floatArrayOf(feetNowX, feetNowY, feetNowZ)
+            }
+            // Si en este tick local no llego paquete nuevo del servidor (jitter), reutilizar el ultimo paso limpio
+            if (dpMag2 < 1e-6f && (stepX * stepX + stepZ * stepZ) < 1e-6f) {
+                stepX = st.prevStepX; stepY = st.prevStepY; stepZ = st.prevStepZ
+            }
+        }
+
+        val spH = sqrt(stepX * stepX + stepZ * stepZ)
+        val prevSpH = sqrt(st.prevStepX * st.prevStepX + st.prevStepZ * st.prevStepZ)
+
+        // 1) Detector Eigen-Axis 2D de Zigzag (detecta inversiones en cualquier angulo, incluido diagonal dx = -dz)
+        if (st.hasPrev && spH > 0.03f && prevSpH > 0.03f) {
+            val dot2D = stepX * st.prevStepX + stepZ * st.prevStepZ
+            if (dot2D < -0.25f * spH * prevSpH) {
+                val iv = st.tick - st.lastFlipTick
+                if (iv in 2..20) {
+                    st.flipPeriod = if (st.flipPeriod <= 0f) iv.toFloat() else (0.4f * st.flipPeriod + 0.6f * iv)
+                }
+                st.lastFlipTick = st.tick
+                st.flipTicks[st.flipHead and 7] = st.tick
+                st.flipHead++
+                val dvx = stepX - st.prevStepX
+                val dvz = stepZ - st.prevStepZ
+                val dvm = sqrt(dvx * dvx + dvz * dvz)
+                if (dvm > 0.01f) {
+                    st.oscAxisX = dvx / dvm
+                    st.oscAxisZ = dvz / dvm
+                }
+            }
+        }
+
+        // 2) EMA de velocidad/aceleracion y CTRV turnRate
+        val oldVx = st.velEmaX; val oldVy = st.velEmaY; val oldVz = st.velEmaZ
+        st.velEmaX = oldVx + 0.72f * (stepX - oldVx)
+        st.velEmaY = oldVy + 0.72f * (stepY - oldVy)
+        st.velEmaZ = oldVz + 0.72f * (stepZ - oldVz)
+        st.accEmaX = (st.accEmaX * 0.45f + 0.55f * (st.velEmaX - oldVx)).coerceIn(-0.25f, 0.25f)
+        st.accEmaY = (st.accEmaY * 0.45f + 0.55f * (st.velEmaY - oldVy)).coerceIn(-0.25f, 0.25f)
+        st.accEmaZ = (st.accEmaZ * 0.45f + 0.55f * (st.velEmaZ - oldVz)).coerceIn(-0.25f, 0.25f)
+
+        if (spH > 0.03f) {
+            val h = atan2(stepZ, stepX)
+            if (st.headingValid) {
+                var dh = h - st.lastHeading
+                while (dh > Math.PI.toFloat()) dh -= (2.0 * Math.PI).toFloat()
+                while (dh < -Math.PI.toFloat()) dh += (2.0 * Math.PI).toFloat()
+                st.turnRate = 0.45f * st.turnRate + 0.55f * dh.coerceIn(-0.6f, 0.6f)
+            }
+            st.lastHeading = h
+            st.headingValid = true
+        } else {
+            st.turnRate *= 0.5f
+            st.headingValid = false
+        }
+
+        // 3) Prediccion Hibrida: Bearing-Coupled Pass-Through (Vly+Timer+Velocity) vs Eigen-Zigzag vs CTRV Orbit
+        val bearingNow = atan2(env.lpZ - feetNowZ, env.lpX - feetNowX)
+        var vxPred: Float
+        var vyPred: Float
+        var vzPred: Float
+
+        var recentFlips = 0
+        for (i in 0 until 8) {
+            if (st.tick - st.flipTicks[i] <= 26) recentFlips++
+        }
+
+        if (spH > 0.40f && st.hasPrev) {
+            // Modo Anti-BypassFly / Anti-Timer / Anti-Velocity (0% KB):
+            // Cuando el rival nos cruza en vuelo con su rotacion lockeada (Legion/Valhalla/Berserk),
+            // su rumbo hacia nosotros gira db = bearingNow - prevBearing, rotando su vector de BypassFly!
+            val db = bearingNow - st.prevBearing
+            val cb = cos(db); val sb = sin(db)
+            vxPred = stepX * cb - stepZ * sb
+            vzPred = stepX * sb + stepZ * cb
+        } else if (recentFlips >= 2 && st.flipPeriod in 2.0f..16.0f) {
+            // Modo Anti-Zigzag sobre el Eigen-Axis 2D con particion sub-tick
+            val ox = st.oscAxisX; val oz = st.oscAxisZ
+            val tx = -oz; val tz = ox
+            val vOsc = stepX * ox + stepZ * oz
+            val vTan = st.velEmaX * tx + st.velEmaZ * tz
+            var s = if (vOsc >= 0f) 1f else -1f
+            val spdOsc = abs(vOsc)
+            var phase = (st.tick - st.lastFlipTick).toFloat() + 1f
+            val lead = 1.6f
+            var rem = lead
+            var disp = 0f
+            while (rem > 1e-4f) {
+                val dt = minOf(1.0f, rem)
+                rem -= dt
+                if (phase + dt > st.flipPeriod) {
+                    val tBefore = maxOf(0f, st.flipPeriod - phase)
+                    val tAfter = dt - tBefore
+                    disp += s * spdOsc * tBefore - s * spdOsc * tAfter
+                    s = -s
+                    phase = tAfter
+                } else {
+                    disp += s * spdOsc * dt
+                    phase += dt
+                }
+            }
+            vxPred = ox * disp + tx * vTan * lead
+            vzPred = oz * disp + tz * vTan * lead
+        } else if (spH > 0.03f && abs(st.turnRate) > 0.02f) {
+            // Modo CTRV Anti-Orbit (contra FrontStrafe / Vortex / Berserk)
+            val h = atan2(st.velEmaZ, st.velEmaX) + st.turnRate
+            val sp = sqrt(st.velEmaX * st.velEmaX + st.velEmaZ * st.velEmaZ)
+            vxPred = cos(h) * sp
+            vzPred = sin(h) * sp
+        } else {
+            vxPred = st.velEmaX + 0.35f * st.accEmaX
+            vzPred = st.velEmaZ + 0.35f * st.accEmaZ
+        }
+
+        // 4) Detector del Descenso Alternado de BypassFly (Shift: vy = -4.2997 con vx=vz=0)
+        if (stepY < -2.2f && spH < 0.06f && st.hasPrev) {
+            vyPred = -0.1266f
+            vxPred = st.prevStepX
+            vzPred = st.prevStepZ
+        } else {
+            vyPred = stepY
+        }
+
+        if (spH > 0.02f || abs(stepY) > 0.02f) {
+            st.prevStepX = stepX; st.prevStepY = stepY; st.prevStepZ = stepZ
+        }
+        st.prevFeetX = feetNowX; st.prevFeetY = feetNowY; st.prevFeetZ = feetNowZ
+        st.prevBearing = bearingNow
+        st.hasPrev = true
+
+        // NO restamos env.lpVX/Y/Z porque nuestra posicion y rotacion viajan juntas en el mismo PlayerAuthInputPacket
+        return floatArrayOf(
+            feetNowX + vxPred,
+            feetNowY + vyPred + ctx.vertOffset,
+            feetNowZ + vzPred
+        )
+    }
+
+    private fun storeCounterAim(ctx: Ctx, dx: Float, dy: Float, dz: Float) {
+        val (pitch0, yaw0) = baseRot(ctx, dx, dy, dz)
+        if (!pitch0.isFinite() || !yaw0.isFinite()) return
+        var pitch = pitch0
+        var yaw = yaw0
+        while (pitch > 90.0f) pitch -= 180.0f
+        while (pitch < -90.0f) pitch += 180.0f
+        while (yaw > 180.0f) yaw -= 360.0f
+        while (yaw < -180.0f) yaw += 360.0f
+        ctx.rotPitch = pitch
+        ctx.rotYaw = yaw
+        ctx.headYaw = yaw
+    }
+
+    // ===================== Ragnarok (Counter de Valhalla, Berserk, AirHvH Pro y Vly+Timer) =====================
+    fun ragnarok(ctx: Ctx, t: Target, env: Env) {
+        val pred = updateCounterAndPredict(ctx, stRagnarok, t, env)
+        val w = t.width.coerceAtLeast(0.2f)
+        val h = t.height.coerceAtLeast(0.5f)
+        val hw = (w * 0.5f - 0.07f).coerceAtLeast(0.05f)
+
+        val cx = env.lpX.coerceIn(pred[0] - hw, pred[0] + hw)
+        val cz = env.lpZ.coerceIn(pred[2] - hw, pred[2] + hw)
+        val cy = env.lpY.coerceIn(pred[1] + 0.25f, pred[1] + h - 0.22f)
+
+        // Micro-oscilacion aperiodica (Golden Ratio phi) acotada estrictamente dentro del hitbox
+        val phi = ((stRagnarok.tick * 0.61803398875f) % 1.0f) * (2.0 * Math.PI).toFloat()
+        val dx0 = pred[0] - env.lpX
+        val dz0 = pred[2] - env.lpZ
+        val d2 = sqrt(dx0 * dx0 + dz0 * dz0)
+        val nx = if (d2 > 0.05f) -dz0 / d2 else 1.0f
+        val nz = if (d2 > 0.05f) dx0 / d2 else 0.0f
+
+        val ax = (cx + nx * sin(phi) * 0.05f).coerceIn(pred[0] - hw, pred[0] + hw)
+        val az = (cz + nz * sin(phi) * 0.05f).coerceIn(pred[2] - hw, pred[2] + hw)
+        val ay = (cy + cos(phi) * 0.05f).coerceIn(pred[1] + 0.20f, pred[1] + h - 0.18f)
+
+        storeCounterAim(ctx, ax - env.lpX, ay - env.lpY, az - env.lpZ)
+    }
+
+    // ===================== Fenrir (Counter de Legion, Score, FrontStrafe y Vortex) =====================
+    fun fenrir(ctx: Ctx, t: Target, env: Env) {
+        val pred = updateCounterAndPredict(ctx, stFenrir, t, env)
+        val w = t.width.coerceAtLeast(0.2f)
+        val h = t.height.coerceAtLeast(0.5f)
+        val hw = (w * 0.5f - 0.05f).coerceAtLeast(0.05f)
+
+        val vx = stFenrir.velEmaX
+        val vz = stFenrir.velEmaZ
+        val sp = sqrt(vx * vx + vz * vz)
+        val leadEdgeX = if (sp > 0.04f) (vx / sp) * 0.09f else 0.0f
+        val leadEdgeZ = if (sp > 0.04f) (vz / sp) * 0.09f else 0.0f
+
+        val ax = (env.lpX.coerceIn(pred[0] - hw, pred[0] + hw) + leadEdgeX).coerceIn(pred[0] - hw, pred[0] + hw)
+        val az = (env.lpZ.coerceIn(pred[2] - hw, pred[2] + hw) + leadEdgeZ).coerceIn(pred[2] - hw, pred[2] + hw)
+        val ay = env.lpY.coerceIn(pred[1] + 0.22f, pred[1] + h - 0.20f)
+
+        storeCounterAim(ctx, ax - env.lpX, ay - env.lpY, az - env.lpZ)
+    }
+
+    // ===================== Eclipse (Counter 3D Multipunto de +999aura / Rooster) =====================
+    fun eclipse(ctx: Ctx, t: Target, env: Env) {
+        val pred = updateCounterAndPredict(ctx, stEclipse, t, env)
+        val w = t.width.coerceAtLeast(0.2f)
+        val h = t.height.coerceAtLeast(0.5f)
+        val hw = (w * 0.5f - 0.05f).coerceAtLeast(0.05f)
+        val yLow = pred[1] + 0.22f
+        val yMid = pred[1] + h * 0.52f
+        val yHigh = pred[1] + h - 0.20f
+
+        val cands = arrayOf(
+            floatArrayOf(env.lpX.coerceIn(pred[0] - hw, pred[0] + hw), env.lpY.coerceIn(yLow, yHigh), env.lpZ.coerceIn(pred[2] - hw, pred[2] + hw)),
+            floatArrayOf(pred[0] - hw, yMid, pred[2] - hw),
+            floatArrayOf(pred[0] + hw, yMid, pred[2] - hw),
+            floatArrayOf(pred[0] - hw, yMid, pred[2] + hw),
+            floatArrayOf(pred[0] + hw, yMid, pred[2] + hw),
+            floatArrayOf(pred[0], yLow, pred[2]),
+            floatArrayOf(pred[0], yMid, pred[2]),
+            floatArrayOf(pred[0], yHigh, pred[2]),
+            floatArrayOf(env.lpX.coerceIn(pred[0] - hw, pred[0] + hw), yMid, env.lpZ.coerceIn(pred[2] - hw, pred[2] + hw))
+        )
+
+        var best = cands[0]
+        var bestDistSq = Float.MAX_VALUE
+        for (c in cands) {
+            val dx = c[0] - env.lpX
+            val dy = c[1] - env.lpY
+            val dz = c[2] - env.lpZ
+            val d2 = dx * dx + dy * dy + dz * dz
+            if (d2 < bestDistSq) {
+                bestDistSq = d2
+                best = c
+            }
+        }
+
+        storeCounterAim(ctx, best[0] - env.lpX, best[1] - env.lpY, best[2] - env.lpZ)
     }
 }

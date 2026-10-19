@@ -20,7 +20,10 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
 import com.retrivedmods.wclient.BuildConfig
 import com.retrivedmods.wclient.R
 import com.retrivedmods.wclient.overlay.OverlayManager
@@ -141,7 +144,83 @@ class WaterMarkOverlay : OverlayWindow() {
         ) {
             when (mode) {
                 WaterMarkModule.WatermarkMode.RGB -> RGBWatermark(time)
+                WaterMarkModule.WatermarkMode.GLOW -> GlowWatermark(time)
+                WaterMarkModule.WatermarkMode.SAKURA_PILL -> SakuraPillWatermark(time)
+                WaterMarkModule.WatermarkMode.CYBER_HUD -> CyberHudWatermark(time)
             }
+        }
+    }
+
+    @Composable
+    private fun SakuraPillWatermark(time: Float) {
+        val fontFamily = getFontFamily()
+        val pulse = (sin(time * 2.5f) * 0.5f + 0.5f)
+        val accent = Color(0xFFFF5CA6)
+        val accent2 = Color(0xFFFF9EC9)
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xD91A1016), Color(0xD92B1522))
+                    ),
+                    androidx.compose.foundation.shape.RoundedCornerShape(50)
+                )
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "🐱 $customText",
+                style = TextStyle(
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = fontSize.sp,
+                    brush = Brush.horizontalGradient(listOf(accent, accent2, Color.White))
+                )
+            )
+            if (showVersion) {
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}",
+                    style = TextStyle(
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = (fontSize * 0.65f).sp,
+                        color = accent2.copy(alpha = 0.7f + 0.3f * pulse)
+                    )
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun CyberHudWatermark(time: Float) {
+        val fontFamily = getFontFamily()
+        val cyan = Color(0xFF00F5D4)
+        val magenta = Color(0xFFFF2A85)
+        val shift = (sin(time * 2f) * 0.5f + 0.5f)
+        val activeColor = blendColors(cyan, magenta, shift)
+        Box(
+            modifier = Modifier
+                .background(Color(0xCC0B0E17), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                .drawBehind {
+                    drawRect(
+                        brush = Brush.horizontalGradient(listOf(cyan, magenta)),
+                        topLeft = Offset(0f, 0f),
+                        size = androidx.compose.ui.geometry.Size(size.width, 3.dp.toPx())
+                    )
+                }
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Text(
+                text = if (showVersion) "$customText // ${BuildConfig.VERSION_NAME}" else customText,
+                style = TextStyle(
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = fontSize.sp,
+                    color = activeColor,
+                    shadow = Shadow(color = activeColor.copy(alpha = 0.6f), blurRadius = 8f)
+                )
+            )
         }
     }
 

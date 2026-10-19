@@ -40,7 +40,10 @@ class GatoAuraModule : Module("GatoAura", ModuleCategory.Combat) {
     // --- named selectors (horizontal chip list in the UI) ---
     private class Mode(override val name: String, val idx: Int) : ListItem
 
-    private val rotModes = listOf(Mode("Unified", 3), Mode("None", 0), Mode("Normal", 1), Mode("Strafe", 2))
+    private val rotModes = listOf(
+        Mode("Ragnarok", 4), Mode("Fenrir", 5), Mode("Eclipse", 6),
+        Mode("Unified", 3), Mode("None", 0), Mode("Normal", 1), Mode("Strafe", 2)
+    )
     private val hitTypes = listOf(Mode("Single", 0), Mode("Multi", 1))
     private val targetPriorities = listOf(Mode("Distance", 0), Mode("Health", 1))
     private val weaponModes = listOf(Mode("None", 0), Mode("Switch", 1), Mode("Spoof", 2))
@@ -81,6 +84,13 @@ class GatoAuraModule : Module("GatoAura", ModuleCategory.Combat) {
     private val hitType get() = (hitTypeItem as Mode).idx
     private val targetPriority get() = (targetPriorityItem as Mode).idx
     private val autoWeaponMode get() = (weaponItem as Mode).idx
+
+    fun cycleRotMode(): String {
+        val currentIdx = rotModes.indexOfFirst { it == rotModeItem }.coerceAtLeast(0)
+        val next = rotModes[(currentIdx + 1) % rotModes.size]
+        rotModeItem = next
+        return next.name
+    }
 
     // runtime state
     private val targetList = ArrayList<Entity>()
@@ -367,7 +377,7 @@ class GatoAuraModule : Module("GatoAura", ModuleCategory.Combat) {
     private fun spoofRotation(packet: PlayerAuthInputPacket) {
         if (!shouldRot || targetList.isEmpty()) return
 
-        if (rotMode == 3) {
+        if (rotMode >= 3) {
             val localPlayer = session.localPlayer
             val target = targetList[0]
             val (w, h) = targetDims(target)
@@ -379,11 +389,13 @@ class GatoAuraModule : Module("GatoAura", ModuleCategory.Combat) {
                 localPlayer.motionX, localPlayer.motionY, localPlayer.motionZ,
                 false, false, false, false, false, System.nanoTime() / 1e9f
             )
-            GatoAuraXRots.unified(
-                ctx,
-                GatoAuraXRots.Target(target.posX, target.posY, target.posZ, target.motionX, target.motionY, target.motionZ, target.rotationYaw, w, h),
-                env
-            )
+            val snap = GatoAuraXRots.Target(target.posX, target.posY, target.posZ, target.motionX, target.motionY, target.motionZ, target.rotationYaw, w, h)
+            when (rotMode) {
+                3 -> GatoAuraXRots.unified(ctx, snap, env)
+                4 -> GatoAuraXRots.ragnarok(ctx, snap, env)
+                5 -> GatoAuraXRots.fenrir(ctx, snap, env)
+                6 -> GatoAuraXRots.eclipse(ctx, snap, env)
+            }
             currentPitch = ctx.rotPitch
             currentYaw = ctx.rotYaw
             packet.rotation = Vector3f.from(currentPitch, packet.rotation.y, currentYaw)

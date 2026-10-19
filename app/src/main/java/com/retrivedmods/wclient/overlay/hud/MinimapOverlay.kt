@@ -68,6 +68,7 @@ class MinimapOverlay : OverlayWindow() {
     private var showNames by mutableStateOf(true)
     private var showDistance by mutableStateOf(false)
     private var showCoordinates by mutableStateOf(false)
+    private var transparentBackground by mutableStateOf(false)
     private var entityCount by mutableStateOf(0)
 
     companion object {
@@ -131,6 +132,10 @@ class MinimapOverlay : OverlayWindow() {
         fun setShowCoordinates(show: Boolean) {
             overlayInstance.showCoordinates = show
         }
+
+        fun setTransparentBackground(transparent: Boolean) {
+            overlayInstance.transparentBackground = transparent
+        }
     }
 
     @Composable
@@ -162,7 +167,10 @@ class MinimapOverlay : OverlayWindow() {
             Box(
                 modifier = Modifier
                     .size(dpSize)
-                    .background(WColors.MinimapBackground, shape = RoundedCornerShape(16.dp)),
+                    .background(
+                        if (transparentBackground) WColors.MinimapBackground.copy(alpha = 0.35f) else WColors.MinimapBackground,
+                        shape = RoundedCornerShape(16.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
             Canvas(modifier = Modifier.size(dpSize)) {

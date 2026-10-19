@@ -225,6 +225,11 @@ object Services {
 
         for (module in ModuleManager.modules) {
             module.session = session
+            if (module.isEnabled) {
+                handler.post {
+                    runCatching { module.onEnabled() }
+                }
+            }
         }
         Log.e("Services", "Init session")
     }

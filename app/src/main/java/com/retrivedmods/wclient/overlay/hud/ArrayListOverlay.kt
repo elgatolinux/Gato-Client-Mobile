@@ -61,9 +61,8 @@ class ArrayListOverlay : OverlayWindow() {
         super.layoutParams.apply {
             flags =
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
 
             width = WindowManager.LayoutParams.WRAP_CONTENT
@@ -337,6 +336,24 @@ class ArrayListOverlay : OverlayWindow() {
                                 )
                             }
                         }
+                        ArrayListModule.BorderStyle.TOP -> {
+                            modifier.drawBehind {
+                                drawRect(
+                                    color = moduleColor,
+                                    topLeft = Offset.Zero,
+                                    size = size.copy(height = borderWidth.toPx())
+                                )
+                            }
+                        }
+                        ArrayListModule.BorderStyle.BOTTOM -> {
+                            modifier.drawBehind {
+                                drawRect(
+                                    color = moduleColor,
+                                    topLeft = Offset(0f, size.height - borderWidth.toPx()),
+                                    size = size.copy(height = borderWidth.toPx())
+                                )
+                            }
+                        }
                         ArrayListModule.BorderStyle.FULL -> {
                             if (smoothGradient && colorMode == ArrayListModule.ColorMode.SMOOTH_GRADIENT) {
                                 val gradientColors = getSmoothGradientColors(index, rainbowOffset, totalModules)
@@ -423,7 +440,7 @@ class ArrayListOverlay : OverlayWindow() {
             ArrayListModule.ColorMode.STATIC -> WColors.Accent
             ArrayListModule.ColorMode.CATEGORY_BASED -> when (modules.getOrNull(index)?.category) {
                 "Combat" -> Color(0xFFFF3333)
-                "Movement" -> Color(0xFF3399FF)
+                "Motion", "Movement" -> Color(0xFF3399FF)
                 "Visual" -> Color(0xFF33FF66)
                 "Misc" -> Color(0xFFFFCC33)
                 "World" -> Color(0xFF33FFFF)

@@ -62,6 +62,8 @@ class CrosshairOverlay : OverlayWindow() {
     private var pulsing by mutableStateOf(false)
     private var pulseSpeed by mutableFloatStateOf(1.0f)
     private var showHitMarker by mutableStateOf(false)
+    private var healthRatio by mutableFloatStateOf(1.0f)
+    private var hasTarget by mutableStateOf(false)
 
     companion object {
         val overlayInstance by lazy { CrosshairOverlay() }
@@ -142,6 +144,14 @@ class CrosshairOverlay : OverlayWindow() {
 
         fun setShowHitMarker(show: Boolean) {
             overlayInstance.showHitMarker = show
+        }
+
+        fun setHealthRatio(ratio: Float) {
+            overlayInstance.healthRatio = ratio.coerceIn(0f, 1f)
+        }
+
+        fun setHasTarget(target: Boolean) {
+            overlayInstance.hasTarget = target
         }
     }
 
@@ -367,11 +377,15 @@ class CrosshairOverlay : OverlayWindow() {
     }
 
     private fun getHealthBasedColor(): Color {
-        return Color.Green
+        return when {
+            healthRatio > 0.6f -> Color.Green
+            healthRatio > 0.3f -> Color.Yellow
+            else -> Color.Red
+        }
     }
 
     private fun getTargetBasedColor(): Color {
-        return Color.White
+        return if (hasTarget) Color(0xFFFF3366) else Color.White
     }
 
     private fun hsvToRgb(h: Float, s: Float, v: Float): Color {

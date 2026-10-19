@@ -1,30 +1,36 @@
 package com.retrivedmods.wclient.router.main
 
-import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Opacity
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.SaveAlt
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Upload
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
+import androidx.compose.ui.unit.sp
 import com.retrivedmods.wclient.R
 import com.retrivedmods.wclient.game.ModuleManager
-import com.retrivedmods.wclient.overlay.OverlayManager
+import com.retrivedmods.wclient.overlay.ColorPreset
+import com.retrivedmods.wclient.overlay.FloatingButtonShape
+import com.retrivedmods.wclient.overlay.GUITheme
+import com.retrivedmods.wclient.overlay.GuiSettingsManager
 import com.retrivedmods.wclient.ui.component.WGlassCard
 import com.retrivedmods.wclient.ui.theme.WColors
 import com.retrivedmods.wclient.util.LocalSnackbarHostState
@@ -35,33 +41,28 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsPageContent() {
     SnackbarHostStateScope {
         val context = LocalContext.current
+        GuiSettingsManager.ensureLoaded(context)
+
         val snackbarHostState = LocalSnackbarHostState.current
         val scope = rememberCoroutineScope()
-        val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
-        var showOpacityDialog by rememberSaveable { mutableStateOf(false) }
         var showFileNameDialog by rememberSaveable { mutableStateOf(false) }
         var configFileName by rememberSaveable { mutableStateOf("") }
         var isExporting by remember { mutableStateOf(false) }
-
-        var overlayOpacity by remember {
-            mutableFloatStateOf(prefs.getFloat("overlay_opacity", 1f))
-        }
-        var shortcutOpacity by remember {
-            mutableFloatStateOf(prefs.getFloat("shortcut_opacity", 1f))
-        }
 
         val importConfigPicker = rememberLauncherForActivityResult(
             ActivityResultContracts.GetContent()
         ) { uri ->
             uri?.let {
                 val ok = ModuleManager.importConfigFromFile(context, it)
+                ModuleManager.saveConfig()
                 scope.launch {
                     snackbarHostState.showSnackbar(
                         if (ok) "Config imported successfully" else "Failed to import config"
@@ -70,13 +71,10 @@ fun SettingsPageContent() {
             }
         }
 
-
         suspend fun exportConfig(fileName: String): Result<String> = withContext(Dispatchers.IO) {
             try {
-
                 val configsDir = ModuleManager.getWClientConfigsDirectory()
                     ?: return@withContext Result.failure(Exception("Failed to create WClient directory"))
-
 
                 val finalFileName = if (fileName.isBlank()) {
                     val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
@@ -86,8 +84,6 @@ fun SettingsPageContent() {
                 }
 
                 val configFile = File(configsDir, "$finalFileName.json")
-
-
                 val success = ModuleManager.exportConfigToFile(context, configFile.absolutePath)
 
                 if (success) {
@@ -127,60 +123,234 @@ fun SettingsPageContent() {
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                OutlinedCard(
+                // 1. ClickGUI Design Selector Card
+                WGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { showOpacityDialog = true }
+                    glowColor = WColors.Primary,
+                    glowIntensity = 0.25f
                 ) {
-                    Row(
-                        Modifier.padding(15.dp),
-                        horizontalArrangement = Arrangement.spacedBy(15.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(Icons.Rounded.Opacity, null, modifier = Modifier.size(24.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.overlay_opacity_settings),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Text(
-                                stringResource(R.string.overlay_opacity_description),
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.ViewCarousel, null, tint = WColors.Primary, modifier = Modifier.size(24.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("ClickGUI Design", style = MaterialTheme.typography.titleMedium, color = WColors.OnSurface)
+                                Text(
+                                    "Choose between 4 interactive ClickGUI layouts",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = WColors.OnSurfaceVariant
+                                )
+                            }
                         }
-                        Icon(
-                            Icons.Rounded.Settings, null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.scale(0.8f).size(20.dp)
-                        )
+
+                        GUITheme.entries.chunked(2).forEach { rowThemes ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                rowThemes.forEach { theme ->
+                                    val selected = GuiSettingsManager.guiTheme == theme
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (selected) WColors.Primary.copy(alpha = 0.15f)
+                                                else WColors.SurfaceVariant.copy(alpha = 0.6f)
+                                            )
+                                            .border(
+                                                width = if (selected) 2.dp else 1.dp,
+                                                color = if (selected) WColors.Primary else WColors.Border,
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { GuiSettingsManager.updateGuiTheme(theme) }
+                                            .padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = theme.displayName,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = if (selected) WColors.Primary else WColors.OnSurface,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = theme.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = WColors.OnSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
+                // 2. Color Presets & Custom RGB Card
                 WGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     glowColor = WColors.Secondary,
-                    glowIntensity = 0.3f
+                    glowIntensity = 0.25f
                 ) {
-                    Row(
-                        Modifier.padding(20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(15.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(Icons.Rounded.Palette, null, tint = WColors.Secondary, modifier = Modifier.size(24.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("GUI Theme", style = MaterialTheme.typography.titleMedium, color = WColors.OnSurface)
-                            Text(
-                                "Classic overlay theme (default)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = WColors.OnSurfaceVariant
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.Palette, null, tint = WColors.Secondary, modifier = Modifier.size(24.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("ClickGUI Color Palette", style = MaterialTheme.typography.titleMedium, color = WColors.OnSurface)
+                                Text(
+                                    "Select a preset theme or customize your own RGB palette",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = WColors.OnSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ColorPreset.entries.forEach { preset ->
+                                val selected = GuiSettingsManager.colorPreset == preset
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { GuiSettingsManager.updateColorPreset(preset) },
+                                    label = { Text(preset.displayName) },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .clip(CircleShape)
+                                                .background(preset.accent)
+                                        )
+                                    }
+                                )
+                            }
+                        }
+
+                        if (GuiSettingsManager.colorPreset == ColorPreset.CUSTOM) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Dark Surface Mode", style = MaterialTheme.typography.bodyMedium)
+                                Switch(
+                                    checked = GuiSettingsManager.customDarkMode,
+                                    onCheckedChange = { GuiSettingsManager.updateCustomRgb(dark = it) }
+                                )
+                            }
+                            Text("Red: ${GuiSettingsManager.customAccentR}", style = MaterialTheme.typography.bodySmall)
+                            Slider(
+                                value = GuiSettingsManager.customAccentR.toFloat(),
+                                onValueChange = { GuiSettingsManager.updateCustomRgb(r = it.roundToInt()) },
+                                valueRange = 0f..255f
+                            )
+                            Text("Green: ${GuiSettingsManager.customAccentG}", style = MaterialTheme.typography.bodySmall)
+                            Slider(
+                                value = GuiSettingsManager.customAccentG.toFloat(),
+                                onValueChange = { GuiSettingsManager.updateCustomRgb(g = it.roundToInt()) },
+                                valueRange = 0f..255f
+                            )
+                            Text("Blue: ${GuiSettingsManager.customAccentB}", style = MaterialTheme.typography.bodySmall)
+                            Slider(
+                                value = GuiSettingsManager.customAccentB.toFloat(),
+                                onValueChange = { GuiSettingsManager.updateCustomRgb(b = it.roundToInt()) },
+                                valueRange = 0f..255f
                             )
                         }
-                        Text("Classic", style = MaterialTheme.typography.bodyMedium, color = WColors.Secondary)
                     }
                 }
 
+                // 3. Floating Button & Opacity Settings Card
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(15.dp),
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.Opacity, null, modifier = Modifier.size(24.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Overlay Button, Blur & Shortcuts",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    "Customize floating controls, opacity, lock & Liquid Glass blur",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FloatingButtonShape.entries.forEach { shape ->
+                                FilterChip(
+                                    selected = GuiSettingsManager.buttonShape == shape,
+                                    onClick = { GuiSettingsManager.updateFloatingControls(shape = shape) },
+                                    label = { Text(shape.displayName) }
+                                )
+                            }
+                        }
+
+                        Text("${stringResource(R.string.overlay_opacity)}: ${(GuiSettingsManager.overlayOpacity * 100).roundToInt()}%")
+                        Slider(
+                            value = GuiSettingsManager.overlayOpacity,
+                            onValueChange = { GuiSettingsManager.updateFloatingControls(btnOpacity = it) },
+                            valueRange = 0.15f..1f
+                        )
+
+                        Text("${stringResource(R.string.shortcut_opacity)}: ${(GuiSettingsManager.shortcutOpacity * 100).roundToInt()}%")
+                        Slider(
+                            value = GuiSettingsManager.shortcutOpacity,
+                            onValueChange = { GuiSettingsManager.updateFloatingControls(shortOpacity = it) },
+                            valueRange = 0.15f..1f
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Liquid Glass Blur (Android 12+)", style = MaterialTheme.typography.bodyMedium)
+                            Switch(
+                                checked = GuiSettingsManager.enableBlur,
+                                onCheckedChange = { GuiSettingsManager.updateWindowStyle(blur = it) }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Lock Shortcut Positions (Anti-Misclick)", style = MaterialTheme.typography.bodyMedium)
+                            Switch(
+                                checked = GuiSettingsManager.lockShortcutsDrag,
+                                onCheckedChange = { GuiSettingsManager.updateFloatingControls(lockShort = it) }
+                            )
+                        }
+                    }
+                }
+
+                // 4. Config Management Card
+                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
@@ -310,72 +480,9 @@ fun SettingsPageContent() {
                                         },
                                         enabled = !isExporting
                                     ) {
-                                        if (isExporting) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                        }
                                         Text(if (isExporting) "Saving..." else "Export")
                                     }
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (showOpacityDialog) {
-            BasicAlertDialog(
-                onDismissRequest = { showOpacityDialog = false },
-                modifier = Modifier.padding(vertical = 24.dp)
-            ) {
-                Surface(
-                    shape = AlertDialogDefaults.shape,
-                    tonalElevation = AlertDialogDefaults.TonalElevation
-                ) {
-                    Column(
-                        Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Text(
-                            stringResource(R.string.overlay_opacity_settings),
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                            Column {
-                                Text(
-                                    stringResource(R.string.overlay_opacity),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                Slider(
-                                    value = overlayOpacity,
-                                    onValueChange = {
-                                        overlayOpacity = it
-                                        prefs.edit { putFloat("overlay_opacity", it) }
-                                        OverlayManager.updateOverlayOpacity(it)
-                                    },
-                                    valueRange = 0f..1f
-                                )
-                            }
-                            Column {
-                                Text(
-                                    stringResource(R.string.shortcut_opacity),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                Slider(
-                                    value = shortcutOpacity,
-                                    onValueChange = {
-                                        shortcutOpacity = it
-                                        prefs.edit { putFloat("shortcut_opacity", it) }
-                                        OverlayManager.updateShortcutOpacity(it)
-                                    },
-                                    valueRange = 0f..1f
-                                )
                             }
                         }
                     }

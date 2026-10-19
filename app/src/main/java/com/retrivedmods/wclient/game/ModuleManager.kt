@@ -12,6 +12,23 @@ import com.retrivedmods.wclient.game.module.combat.AutoTotemModule
 import com.retrivedmods.wclient.game.module.combat.GatoAuraModule        // NUEVO (port de Gato Client)
 import com.retrivedmods.wclient.game.module.combat.GatoAuraXModule       // NUEVO (port de Gato Client)
 import com.retrivedmods.wclient.game.module.combat.Plus999AuraModule     // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.combat.CriticalsModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.combat.BowSpamModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.combat.OffhandModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.combat.AutoArmorModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.combat.RotCycleModule    // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.motion.FastStopModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.motion.AutoSneakModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.BlinkModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.NoPacketModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.DisablerModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.FastUseModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.KeyStrokesModule
+import com.retrivedmods.wclient.game.module.misc.AutoHotbarModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.ChatSuffixModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.AutoTPAModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.AutoKitModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.misc.AutoHubModule   // NUEVO (port de Gato Client)
 import com.retrivedmods.wclient.game.module.misc.ArrayListModule
 import com.retrivedmods.wclient.game.module.motion.NoClipModule
 import com.retrivedmods.wclient.game.module.motion.BypassFlyModule       // NUEVO (port de Gato Client)
@@ -60,6 +77,11 @@ import com.retrivedmods.wclient.game.module.visual.SpeedDisplayModule
 import com.retrivedmods.wclient.game.module.visual.WorldStateModule
 import com.retrivedmods.wclient.game.module.visual.ZoomModule
 import com.retrivedmods.wclient.game.module.visual.TargetHudModule
+import com.retrivedmods.wclient.game.module.visual.PearlTrackerModule   // NUEVO (port de Gato Client)
+import com.retrivedmods.wclient.game.module.visual.SessionInfoModule
+import com.retrivedmods.wclient.game.module.visual.NotificationsModule
+import com.retrivedmods.wclient.game.module.visual.CatCompanionModule
+import com.retrivedmods.wclient.game.module.visual.HitEffectsModule
 import com.retrivedmods.wclient.game.module.world.FreeCameraModule
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -91,6 +113,11 @@ object ModuleManager {
             add(GatoAuraModule())          // NUEVO — port de GatoAura (Gato Client)
             add(GatoAuraXModule())         // NUEVO — port de GatoAuraX (Gato Client)
             add(Plus999AuraModule())       // NUEVO — port de +999aura (Gato Client)
+            add(CriticalsModule())  // NUEVO — port de Gato Client
+            add(BowSpamModule())  // NUEVO — port de Gato Client
+            add(OffhandModule())  // NUEVO — port de Gato Client
+            add(AutoArmorModule())  // NUEVO — port de Gato Client
+            add(RotCycleModule())   // NUEVO — port de Gato Client (cicla rots con 1 toque)
 
             // Motion
             add(MotionFlyModule())
@@ -107,6 +134,8 @@ object ModuleManager {
             add(AutoWalkModule())
             add(AntiAFKModule())
             add(SpiderModule())
+            add(FastStopModule())  // NUEVO — port de Gato Client
+            add(AutoSneakModule())  // NUEVO — port de Gato Client
 
             // Visual
             add(DamageTextModule())
@@ -122,6 +151,11 @@ object ModuleManager {
             add(CrosshairModule())
             add(TargetHudModule())
             add(FullbrightModule())
+            add(PearlTrackerModule())  // NUEVO — port de Gato Client
+            add(SessionInfoModule())
+            add(NotificationsModule())
+            add(CatCompanionModule())
+            add(HitEffectsModule())
 
             // World
             add(FreeCameraModule())
@@ -149,6 +183,16 @@ object ModuleManager {
             add(FakeDeathModule())
             add(FakeXPModule())
             add(MinerModule())
+            add(BlinkModule())  // NUEVO — port de Gato Client
+            add(DisablerModule())  // NUEVO — port de Gato Client
+            add(FastUseModule())  // NUEVO — port de Gato Client
+            add(AutoHotbarModule())  // NUEVO — port de Gato Client
+            add(ChatSuffixModule())  // NUEVO — port de Gato Client
+            add(AutoTPAModule())  // NUEVO — port de Gato Client
+            add(AutoKitModule())  // NUEVO — port de Gato Client
+            add(AutoHubModule())  // NUEVO — port de Gato Client
+            add(NoPacketModule())  // NUEVO — port de Gato Client
+            add(KeyStrokesModule())
         }
     }
 

@@ -179,6 +179,11 @@ class TargetHudOverlay : OverlayWindow() {
         fun setPosition(x: Int, y: Int) {
             overlayInstance._layoutParams.x = x
             overlayInstance._layoutParams.y = y
+            if (isVisible) {
+                try {
+                    overlayInstance.windowManager.updateViewLayout(overlayInstance.composeView, overlayInstance._layoutParams)
+                } catch (_: Exception) {}
+            }
         }
 
         fun setScale(scale: Float) {

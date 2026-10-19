@@ -10,7 +10,10 @@ import com.retrivedmods.wclient.game.registry.ItemMappingProvider
 import com.retrivedmods.wclient.game.world.Level
 import com.retrivedmods.wrelay.WRelaySession
 import org.cloudburstmc.protocol.bedrock.data.definitions.ItemDefinition
+import org.cloudburstmc.protocol.bedrock.data.command.CommandOriginData
+import org.cloudburstmc.protocol.bedrock.data.command.CommandOriginType
 import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket
+import org.cloudburstmc.protocol.bedrock.packet.CommandRequestPacket
 import org.cloudburstmc.protocol.bedrock.packet.ItemComponentPacket
 import org.cloudburstmc.protocol.bedrock.packet.StartGamePacket
 import org.cloudburstmc.protocol.bedrock.packet.TextPacket
@@ -35,6 +38,10 @@ class GameSession(val wRelaySession: WRelaySession) : ComposedPacketHandler {
 
     private var startGameReceived = false
 
+    // Command version the game client uses; copied from its own CommandRequestPackets
+    // so commands sent by modules look identical to typed ones.
+    private var commandVersion = 48
+
     fun clientBound(packet: BedrockPacket) {
         wRelaySession.clientBound(packet)
     }
@@ -43,7 +50,7 @@ class GameSession(val wRelaySession: WRelaySession) : ComposedPacketHandler {
         wRelaySession.serverBound(packet)
     }
 
-    override fun beforePacketBound(packet: BedrockPacket): Boolean {
+    override fun beforePacketBound(packet: BedrockPacket, isServerBound: Boolean): Boolean {
         when (packet) {
             is StartGamePacket -> {
                 try {
@@ -90,10 +97,14 @@ class GameSession(val wRelaySession: WRelaySession) : ComposedPacketHandler {
             }
         }
 
+        if (isServerBound && packet is CommandRequestPacket) {
+            commandVersion = packet.version
+        }
+
         localPlayer.onPacketBound(packet)
         level.onPacketBound(packet)
 
-        val interceptablePacket = InterceptablePacket(packet)
+        val interceptablePacket = InterceptablePacket(packet, isServerBound)
 
         for (module in ModuleManager.modules) {
             // Set session if not already set
@@ -134,6 +145,21 @@ class GameSession(val wRelaySession: WRelaySession) : ComposedPacketHandler {
         textPacket.platformChatId = ""
         textPacket.filteredMessage = ""
         clientBound(textPacket)
+    }
+
+    /** Sends a chat command (e.g. "/kit 1") to the server as if the player had typed it. */
+    fun sendCommand(command: String) {
+        val commandRequestPacket = CommandRequestPacket()
+        commandRequestPacket.command = if (command.startsWith("/")) command else "/$command"
+        commandRequestPacket.commandOriginData = CommandOriginData(
+            CommandOriginType.PLAYER,
+            localPlayer.uuid,
+            "",
+            0L
+        )
+        commandRequestPacket.internal = false
+        commandRequestPacket.version = commandVersion
+        serverBound(commandRequestPacket)
     }
 
 }

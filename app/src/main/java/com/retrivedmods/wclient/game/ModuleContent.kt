@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,82 +14,84 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.ElevatedFilterChip
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import com.retrivedmods.wclient.R
+import com.retrivedmods.wclient.overlay.GuiSettingsManager
 import com.retrivedmods.wclient.overlay.OverlayManager
 import com.retrivedmods.wclient.util.translatedSelf
 import kotlin.math.roundToInt
 
-
-private val DarkBackground = Color(0xFFFFFFFF)
-private val CardBackground = Color(0xFFFFF3F8)
-private val CardBackgroundExpanded = Color(0xFFFFE6F0)
-private val AccentPrimary = Color(0xFFFF5CA6)
-private val AccentSecondary = Color(0xFFFF7CB8)
-private val AccentDark = Color(0xFFD6407F)
-private val TextPrimary = Color(0xFF4A2438)
-private val TextSecondary = Color(0xFF9C7288)
-private val BorderColor = Color(0xFFFFC2DD)
-private val BorderColorActive = Color(0xFFFF8FC0)
-private val ErrorRed = Color(0xFFCF222E)
-
-private val moduleCache = HashMap<ModuleCategory, List<Module>>()
-
-private fun fetchCachedModules(category: ModuleCategory): List<Module> =
-    moduleCache.getOrPut(category) {
-        ModuleManager.modules.filter { !it.private && it.category === category }
-    }
-
 @Composable
-fun ModuleContent(moduleCategory: ModuleCategory) {
-    // Filtering an already-in-memory list is sub-millisecond work - no need for
-    // a coroutine/IO dispatch or a loading spinner here, that was adding a
-    // visible stall to every single category switch (the most frequent action
-    // in this menu).
-    val list = remember(moduleCategory) { fetchCachedModules(moduleCategory) }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(list.size, key = { list[it].name }) { i -> ModuleCard(list[i]) }
+fun rememberGuiFontFamily(): FontFamily {
+    val useMc = GuiSettingsManager.useMinecraftFont
+    return remember(useMc) {
+        if (useMc) {
+            try {
+                FontFamily(Font(R.font.minecraft))
+            } catch (_: Exception) {
+                FontFamily.Default
+            }
+        } else {
+            FontFamily.Default
+        }
     }
 }
 
 @Composable
-private fun ModuleCard(module: Module) {
-    val values = module.values
+fun ModuleContent(
+    moduleCategory: ModuleCategory,
+    searchQuery: String = "",
+    onlyFavorites: Boolean = false,
+    onlyActive: Boolean = false
+) {
+    val allVisible = remember {
+        ModuleManager.modules.filter { !it.private }
+    }
+
+    val filtered = allVisible.filter { mod ->
+        val matchesCategory = searchQuery.isNotBlank() || onlyFavorites || onlyActive || mod.category == moduleCategory
+        val matchesQuery = searchQuery.isBlank() ||
+                mod.name.translatedSelf.contains(searchQuery, ignoreCase = true) ||
+                mod.name.contains(searchQuery, ignoreCase = true)
+        val matchesFav = !onlyFavorites || mod.isFavorite
+        val matchesActive = !onlyActive || mod.isEnabled
+        matchesCategory && matchesQuery && matchesFav && matchesActive
+    }.sortedByDescending { it.isFavorite }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(filtered.size, key = { filtered[it].name }) { i ->
+            ModuleCard(filtered[i])
+        }
+    }
+}
+
+@Composable
+fun ModuleCard(module: Module) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
     val bg by animateColorAsState(
-        targetValue = if (module.isExpanded) CardBackgroundExpanded else CardBackground,
-        animationSpec = tween(durationMillis = 300),
+        targetValue = if (module.isExpanded) palette.cardExpandedBg else palette.cardBg,
+        animationSpec = tween(durationMillis = 240),
         label = "moduleBg"
     )
 
@@ -105,7 +108,11 @@ private fun ModuleCard(module: Module) {
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { module.isExpanded = !module.isExpanded },
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            width = if (module.isEnabled) 1.5.dp else 1.dp,
+            color = if (module.isEnabled) palette.accent.copy(alpha = 0.65f) else palette.border.copy(alpha = 0.4f)
+        ),
         colors = CardDefaults.cardColors(containerColor = bg),
         elevation = CardDefaults.cardElevation(defaultElevation = elevation.dp)
     ) {
@@ -114,51 +121,146 @@ private fun ModuleCard(module: Module) {
                 .fillMaxWidth()
                 .animateContentSize(
                     animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
                     )
                 ),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
-                Text(
-                    module.name.translatedSelf,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (module.isEnabled) AccentPrimary else TextPrimary
-                )
-                Spacer(Modifier.weight(1f))
+                IconButton(
+                    onClick = {
+                        module.isFavorite = !module.isFavorite
+                        com.retrivedmods.wclient.util.ConfigAutoSaver.scheduleSave()
+                    },
+                    modifier = Modifier.size(26.dp)
+                ) {
+                    Icon(
+                        imageVector = if (module.isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        contentDescription = "Favorite",
+                        tint = if (module.isFavorite) Color(0xFFFFC107) else palette.textSecondary.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        module.name.translatedSelf,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (module.isEnabled) palette.accent else palette.textPrimary
+                    )
+                    if (module.values.isNotEmpty()) {
+                        Text(
+                            text = "${module.values.size} settings • tap to ${if (module.isExpanded) "collapse" else "configure"}",
+                            fontSize = 10.sp,
+                            fontFamily = fontFamily,
+                            color = palette.textSecondary.copy(alpha = 0.75f)
+                        )
+                    }
+                }
                 Switch(
                     checked = module.isEnabled,
                     onCheckedChange = { module.isEnabled = it },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = AccentPrimary,
-                        checkedTrackColor = AccentPrimary.copy(alpha = 0.3f),
+                        checkedThumbColor = palette.accent,
+                        checkedTrackColor = palette.accent.copy(alpha = 0.3f),
                         checkedBorderColor = Color.Transparent,
-                        uncheckedThumbColor = Color(0xFFE8A9C9),
-                        uncheckedTrackColor = Color(0xFFFFEAF3),
-                        uncheckedBorderColor = BorderColor
+                        uncheckedThumbColor = palette.textSecondary,
+                        uncheckedTrackColor = palette.sidebarBg,
+                        uncheckedBorderColor = palette.border
                     ),
                     modifier = Modifier
-                        .width(52.dp)
-                        .height(32.dp)
+                        .width(50.dp)
+                        .height(30.dp)
                 )
             }
 
             if (module.isExpanded) {
-                values.fastForEach {
-                    when (it) {
-                        is BoolValue -> BoolValueContent(it)
-                        is FloatValue -> FloatValueContent(it)
-                        is IntValue -> IntValueContent(it)
-                        is ListValue -> ChoiceValueContent(it)
-                        is EnumValue<*> -> EnumValueContent(it)
-                        is StringValue -> StringValueContent(it)
-                    }
+                ModuleSettingsBody(module)
+            }
+        }
+    }
+}
+
+@Composable
+fun ModuleSettingsBody(module: Module) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        module.values.fastForEach {
+            when (it) {
+                is BoolValue -> BoolValueContent(it)
+                is FloatValue -> FloatValueContent(it)
+                is IntValue -> IntValueContent(it)
+                is ListValue -> ChoiceValueContent(it)
+                is EnumValue<*> -> EnumValueContent(it)
+                is StringValue -> StringValueContent(it)
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier
+                    .toggleable(
+                        value = module.isShortcutDisplayed,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = true
+                    ) {
+                        module.isShortcutDisplayed = it
+                        if (it) OverlayManager.showOverlayWindow(module.overlayShortcutButton)
+                        else OverlayManager.dismissOverlayWindow(module.overlayShortcutButton)
+                    },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = module.isShortcutDisplayed,
+                    onCheckedChange = null,
+                    colors = CheckboxDefaults.colors(
+                        uncheckedColor = palette.textSecondary,
+                        checkedColor = palette.accent,
+                        checkmarkColor = Color.White
+                    )
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(R.string.shortcut),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = fontFamily,
+                    color = palette.textSecondary
+                )
+            }
+
+            if (module.values.isNotEmpty()) {
+                TextButton(
+                    onClick = { module.resetValues() },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Refresh,
+                        contentDescription = "Reset",
+                        tint = palette.accent,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "Reset",
+                        color = palette.accent,
+                        fontSize = 11.sp,
+                        fontFamily = fontFamily
+                    )
                 }
-                ShortcutContent(module)
             }
         }
     }
@@ -166,39 +268,45 @@ private fun ModuleCard(module: Module) {
 
 @Composable
 private fun ChoiceValueContent(value: ListValue) {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
+
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) {
         Text(
             value.name.translatedSelf,
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 8.dp)
+            fontFamily = fontFamily,
+            color = palette.textSecondary,
+            modifier = Modifier.padding(bottom = 6.dp)
         )
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             value.listItems.forEach { item ->
                 ElevatedFilterChip(
                     selected = value.value == item,
                     onClick = { if (value.value != item) value.value = item },
-                    label = { Text(item.name.translatedSelf) },
-                    modifier = Modifier.height(32.dp),
+                    label = {
+                        Text(
+                            item.name.translatedSelf,
+                            fontFamily = fontFamily,
+                            fontSize = 12.sp
+                        )
+                    },
+                    modifier = Modifier.height(30.dp),
                     enabled = true,
                     colors = FilterChipDefaults.filterChipColors(
-                        containerColor = Color(0xFFFFEAF3),
-                        selectedContainerColor = AccentPrimary,
-                        labelColor = TextSecondary,
-                        selectedLabelColor = Color.White,
-                        disabledContainerColor = Color(0xFFFFF3F8),
-                        disabledLabelColor = Color(0xFFC98FB0)
+                        containerColor = palette.sidebarBg,
+                        selectedContainerColor = palette.accent,
+                        labelColor = palette.textSecondary,
+                        selectedLabelColor = Color.White
                     ),
                     border = FilterChipDefaults.filterChipBorder(
                         enabled = true,
                         selected = value.value == item,
-                        borderColor = BorderColor,
-                        selectedBorderColor = AccentPrimary,
-                        disabledBorderColor = Color(0xFFFFEAF3),
-                        disabledSelectedBorderColor = Color(0xFFFFEAF3)
+                        borderColor = palette.border,
+                        selectedBorderColor = palette.accent
                     )
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
             }
         }
     }
@@ -206,32 +314,33 @@ private fun ChoiceValueContent(value: ListValue) {
 
 @Composable
 private fun FloatValueContent(value: FloatValue) {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
-        Row(modifier = Modifier.padding(bottom = 4.dp)) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
+
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
+        Row {
             Text(
                 value.name.translatedSelf,
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                fontFamily = fontFamily,
+                color = palette.textSecondary
             )
             Spacer(Modifier.weight(1f))
             Text(
                 String.format("%.2f", value.value),
                 style = MaterialTheme.typography.bodyMedium,
-                color = AccentPrimary
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Bold,
+                color = palette.accent
             )
         }
 
         val colors = SliderDefaults.colors(
-            thumbColor = AccentPrimary,
-            activeTrackColor = AccentPrimary,
-            activeTickColor = AccentPrimary,
-            inactiveTickColor = Color(0xFFFFC2DD),
-            inactiveTrackColor = Color(0xFFFFC2DD),
-            disabledThumbColor = Color(0xFFE8A9C9),
-            disabledActiveTrackColor = Color(0xFFFFC2DD),
-            disabledActiveTickColor = Color(0xFFFFC2DD),
-            disabledInactiveTrackColor = Color(0xFFFFEAF3),
-            disabledInactiveTickColor = Color(0xFFFFEAF3)
+            thumbColor = palette.accent,
+            activeTrackColor = palette.accent,
+            activeTickColor = palette.accent,
+            inactiveTickColor = palette.border,
+            inactiveTrackColor = palette.border
         )
 
         Slider(
@@ -249,32 +358,33 @@ private fun FloatValueContent(value: FloatValue) {
 
 @Composable
 private fun IntValueContent(value: IntValue) {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
-        Row(modifier = Modifier.padding(bottom = 4.dp)) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
+
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
+        Row {
             Text(
                 value.name.translatedSelf,
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                fontFamily = fontFamily,
+                color = palette.textSecondary
             )
             Spacer(Modifier.weight(1f))
             Text(
                 value.value.toString(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = AccentPrimary
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Bold,
+                color = palette.accent
             )
         }
 
         val colors = SliderDefaults.colors(
-            thumbColor = AccentPrimary,
-            activeTrackColor = AccentPrimary,
-            activeTickColor = AccentPrimary,
-            inactiveTickColor = Color(0xFFFFC2DD),
-            inactiveTrackColor = Color(0xFFFFC2DD),
-            disabledThumbColor = Color(0xFFE8A9C9),
-            disabledActiveTrackColor = Color(0xFFFFC2DD),
-            disabledActiveTickColor = Color(0xFFFFC2DD),
-            disabledInactiveTrackColor = Color(0xFFFFEAF3),
-            disabledInactiveTickColor = Color(0xFFFFEAF3)
+            thumbColor = palette.accent,
+            activeTrackColor = palette.accent,
+            activeTickColor = palette.accent,
+            inactiveTickColor = palette.border,
+            inactiveTrackColor = palette.border
         )
 
         Slider(
@@ -292,9 +402,12 @@ private fun IntValueContent(value: IntValue) {
 
 @Composable
 private fun BoolValueContent(value: BoolValue) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
+
     Row(
         Modifier
-            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            .padding(start = 16.dp, end = 16.dp, bottom = 6.dp)
             .fillMaxWidth()
             .toggleable(
                 value = value.value,
@@ -307,7 +420,8 @@ private fun BoolValueContent(value: BoolValue) {
         Text(
             value.name.translatedSelf,
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
+            fontFamily = fontFamily,
+            color = palette.textSecondary
         )
         Spacer(Modifier.weight(1f))
         Checkbox(
@@ -316,53 +430,9 @@ private fun BoolValueContent(value: BoolValue) {
             modifier = Modifier.padding(0.dp),
             enabled = true,
             colors = CheckboxDefaults.colors(
-                uncheckedColor = Color(0xFFE8A9C9),
-                checkedColor = AccentPrimary,
-                checkmarkColor = Color.White,
-                disabledCheckedColor = Color(0xFFE8A9C9),
-                disabledUncheckedColor = Color(0xFFF3B8D4),
-                disabledIndeterminateColor = Color(0xFFE8A9C9)
-            )
-        )
-    }
-}
-
-@Composable
-private fun ShortcutContent(module: Module) {
-    Row(
-        Modifier
-            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-            .fillMaxWidth()
-            .toggleable(
-                value = module.isShortcutDisplayed,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = true
-            ) {
-                module.isShortcutDisplayed = it
-                if (it) OverlayManager.showOverlayWindow(module.overlayShortcutButton)
-                else OverlayManager.dismissOverlayWindow(module.overlayShortcutButton)
-            },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            stringResource(R.string.shortcut),
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary
-        )
-        Spacer(Modifier.weight(1f))
-        Checkbox(
-            checked = module.isShortcutDisplayed,
-            onCheckedChange = null,
-            modifier = Modifier.padding(0.dp),
-            enabled = true,
-            colors = CheckboxDefaults.colors(
-                uncheckedColor = Color(0xFFE8A9C9),
-                checkedColor = AccentPrimary,
-                checkmarkColor = Color.White,
-                disabledCheckedColor = Color(0xFFE8A9C9),
-                disabledUncheckedColor = Color(0xFFF3B8D4),
-                disabledIndeterminateColor = Color(0xFFE8A9C9)
+                uncheckedColor = palette.textSecondary,
+                checkedColor = palette.accent,
+                checkmarkColor = Color.White
             )
         )
     }
@@ -370,39 +440,45 @@ private fun ShortcutContent(module: Module) {
 
 @Composable
 private fun <T : Enum<T>> EnumValueContent(value: EnumValue<T>) {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
+
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) {
         Text(
             value.name.translatedSelf,
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 8.dp)
+            fontFamily = fontFamily,
+            color = palette.textSecondary,
+            modifier = Modifier.padding(bottom = 6.dp)
         )
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             value.enumClass.enumConstants?.forEach { option ->
                 ElevatedFilterChip(
                     selected = value.value == option,
                     onClick = { if (value.value != option) value.value = option },
-                    label = { Text(option.name.translatedSelf) },
-                    modifier = Modifier.height(32.dp),
+                    label = {
+                        Text(
+                            option.name.translatedSelf,
+                            fontFamily = fontFamily,
+                            fontSize = 12.sp
+                        )
+                    },
+                    modifier = Modifier.height(30.dp),
                     enabled = true,
                     colors = FilterChipDefaults.filterChipColors(
-                        containerColor = Color(0xFFFFEAF3),
-                        selectedContainerColor = AccentPrimary,
-                        labelColor = TextSecondary,
-                        selectedLabelColor = Color.White,
-                        disabledContainerColor = Color(0xFFFFF3F8),
-                        disabledLabelColor = Color(0xFFC98FB0)
+                        containerColor = palette.sidebarBg,
+                        selectedContainerColor = palette.accent,
+                        labelColor = palette.textSecondary,
+                        selectedLabelColor = Color.White
                     ),
                     border = FilterChipDefaults.filterChipBorder(
                         enabled = true,
                         selected = value.value == option,
-                        borderColor = BorderColor,
-                        selectedBorderColor = AccentPrimary,
-                        disabledBorderColor = Color(0xFFFFEAF3),
-                        disabledSelectedBorderColor = Color(0xFFFFEAF3)
+                        borderColor = palette.border,
+                        selectedBorderColor = palette.accent
                     )
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
             }
         }
     }
@@ -410,12 +486,16 @@ private fun <T : Enum<T>> EnumValueContent(value: EnumValue<T>) {
 
 @Composable
 private fun StringValueContent(value: StringValue) {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+    val palette = GuiSettingsManager.currentPalette()
+    val fontFamily = rememberGuiFontFamily()
+
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) {
         Text(
             value.name.translatedSelf,
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 8.dp)
+            fontFamily = fontFamily,
+            color = palette.textSecondary,
+            modifier = Modifier.padding(bottom = 6.dp)
         )
         OutlinedTextField(
             value = value.value,
@@ -424,16 +504,11 @@ private fun StringValueContent(value: StringValue) {
             modifier = Modifier.fillMaxWidth(),
             enabled = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = AccentPrimary,
-                unfocusedBorderColor = BorderColor,
-                focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary,
-                cursorColor = AccentPrimary,
-                disabledBorderColor = Color(0xFFFFEAF3),
-                disabledTextColor = Color(0xFFC98FB0),
-                errorBorderColor = ErrorRed,
-                errorTextColor = TextPrimary,
-                errorCursorColor = ErrorRed
+                focusedBorderColor = palette.accent,
+                unfocusedBorderColor = palette.border,
+                focusedTextColor = palette.textPrimary,
+                unfocusedTextColor = palette.textPrimary,
+                cursorColor = palette.accent
             ),
             shape = MaterialTheme.shapes.small
         )

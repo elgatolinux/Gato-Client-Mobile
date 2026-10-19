@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,9 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.sp
 import com.retrivedmods.wclient.game.Module
+import com.retrivedmods.wclient.overlay.GuiSettingsManager
 import com.retrivedmods.wclient.overlay.OverlayWindow
 import com.retrivedmods.wclient.util.translatedSelf
 import kotlin.math.min
@@ -42,73 +45,81 @@ class OverlayShortcutButton(
     override val layoutParams: WindowManager.LayoutParams
         get() = _layoutParams
 
-    // See OverlayButton for why this exists: updateViewLayout() is a
-    // WindowManager IPC + full relayout, too heavy to call on every raw
-    // pointer-move sample without the drag feeling stuck.
     private var lastDragUpdateTime = 0L
 
     @Composable
     override fun Content() {
         val context = LocalContext.current
+        GuiSettingsManager.ensureLoaded(context)
+
         val width = context.resources.displayMetrics.widthPixels
         val height = context.resources.displayMetrics.heightPixels
         val configuration = LocalConfiguration.current
         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+        val palette = GuiSettingsManager.currentPalette()
+        val scale = GuiSettingsManager.shortcutScale
+
         val borderColor by animateColorAsState(
-            targetValue = if (module.isEnabled) Color(0xFFFF5CA6) else Color.Transparent,
+            targetValue = if (module.isEnabled) palette.accent else palette.border.copy(alpha = 0.5f),
             label = "borderColor"
         )
         val textColor by animateColorAsState(
-            targetValue = if (module.isEnabled) Color(0xFFFF5CA6) else Color(0xFF4A2438),
+            targetValue = if (module.isEnabled) palette.accent else palette.textPrimary,
             label = "textColor"
         )
 
         val bg = Brush.verticalGradient(
             listOf(
-                Color(0xFFFFFFFF),
-                Color(0xFFFFD6E8)
+                palette.windowBgTop,
+                palette.windowBgBottom
             )
         )
 
         LaunchedEffect(isLandscape) {
             _layoutParams.x = min(width, _layoutParams.x)
             _layoutParams.y = min(height, _layoutParams.y)
-            windowManager.updateViewLayout(composeView, _layoutParams)
+            runCatching { windowManager.updateViewLayout(composeView, _layoutParams) }
             updateShortcut()
         }
 
+        val shape = RoundedCornerShape((14 * scale).dp)
+
         Box(
             modifier = Modifier
-                .width(110.dp)
-                .height(44.dp)
-                .padding(6.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragEnd = {
-                            windowManager.updateViewLayout(composeView, _layoutParams)
-                            updateShortcut()
-                        }
-                    ) { _, drag ->
-                        _layoutParams.x += drag.x.toInt()
-                        _layoutParams.y += drag.y.toInt()
-                        val now = System.currentTimeMillis()
-                        if (now - lastDragUpdateTime >= 8L) {
-                            lastDragUpdateTime = now
-                            windowManager.updateViewLayout(composeView, _layoutParams)
-                            updateShortcut()
+                .width((110 * scale).dp)
+                .height((44 * scale).dp)
+                .padding(5.dp)
+                .pointerInput(GuiSettingsManager.lockShortcutsDrag) {
+                    if (!GuiSettingsManager.lockShortcutsDrag) {
+                        detectDragGestures(
+                            onDragEnd = {
+                                runCatching { windowManager.updateViewLayout(composeView, _layoutParams) }
+                                updateShortcut()
+                            }
+                        ) { _, drag ->
+                            _layoutParams.x += drag.x.toInt()
+                            _layoutParams.y += drag.y.toInt()
+                            val now = System.currentTimeMillis()
+                            if (now - lastDragUpdateTime >= 8L) {
+                                lastDragUpdateTime = now
+                                runCatching { windowManager.updateViewLayout(composeView, _layoutParams) }
+                                updateShortcut()
+                            }
                         }
                     }
                 }
-                .shadow(8.dp, RoundedCornerShape(14.dp))
-                .background(bg, RoundedCornerShape(14.dp))
-                .border(2.dp, borderColor, RoundedCornerShape(14.dp))
+                .shadow(6.dp, shape)
+                .background(bg, shape)
+                .border(if (module.isEnabled) 2.dp else 1.dp, borderColor, shape)
                 .clickable { module.isEnabled = !module.isEnabled }
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = module.name.translatedSelf,
                     color = textColor,
+                    fontSize = (12 * scale).sp,
+                    fontWeight = if (module.isEnabled) FontWeight.Bold else FontWeight.Medium,
                     style = MaterialTheme.typography.labelMedium
                 )
             }
@@ -118,5 +129,6 @@ class OverlayShortcutButton(
     private fun updateShortcut() {
         module.shortcutX = _layoutParams.x
         module.shortcutY = _layoutParams.y
+        com.retrivedmods.wclient.util.ConfigAutoSaver.scheduleSave()
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.retrivedmods.wclient.overlay.gui.classic.OverlayShortcutButton
+import com.retrivedmods.wclient.overlay.hud.NotificationsOverlay
 import com.retrivedmods.wclient.util.translatedSelf
 import com.retrivedmods.wclient.util.SoundUtil
 import com.retrivedmods.wclient.game.module.misc.ToggleSoundModule
@@ -34,6 +35,7 @@ abstract class Module(
 
     var isExpanded by mutableStateOf(false)
     var isShortcutDisplayed by mutableStateOf(false)
+    var isFavorite by mutableStateOf(false)
 
     var shortcutX = 0
     var shortcutY = 100
@@ -41,6 +43,11 @@ abstract class Module(
     val overlayShortcutButton by lazy { OverlayShortcutButton(this) }
 
     override val values: MutableList<Value<*>> = ArrayList()
+
+    fun resetValues() {
+        values.forEach { it.reset() }
+        com.retrivedmods.wclient.util.ConfigAutoSaver.scheduleSave()
+    }
 
 
 
@@ -73,6 +80,9 @@ abstract class Module(
 
     open fun toJson() = buildJsonObject {
         put("state", isEnabled)
+        if (isFavorite) {
+            put("favorite", true)
+        }
         put("values", buildJsonObject {
             values.forEach { value ->
                 put(value.name, value.toJson())
@@ -89,6 +99,7 @@ abstract class Module(
     open fun fromJson(jsonElement: JsonElement) {
         if (jsonElement is JsonObject) {
             isEnabled = (jsonElement["state"] as? JsonPrimitive)?.boolean ?: isEnabled
+            isFavorite = (jsonElement["favorite"] as? JsonPrimitive)?.boolean ?: isFavorite
 
             (jsonElement["values"] as? JsonObject)?.forEach { (key, json) ->
                 val value = getValue(key) ?: return@forEach
@@ -115,6 +126,12 @@ abstract class Module(
         val stateText = if (enabled) "enabled".translatedSelf else "disabled".translatedSelf
         val status = (if (enabled) "§a" else "§c") + stateText
         val moduleName = name.translatedSelf
+
+        NotificationsOverlay.push(
+            title = moduleName,
+            subtitle = if (enabled) "Enabled ✔" else "Disabled ✘",
+            isPositive = enabled
+        )
 
         session.displayClientMessage(
             "§l§d[Gato Client] §r§7$moduleName §8» $status"

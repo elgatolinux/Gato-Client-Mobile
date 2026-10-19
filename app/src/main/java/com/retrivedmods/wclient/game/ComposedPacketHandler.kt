@@ -5,16 +5,16 @@ import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket
 
 interface ComposedPacketHandler : WRelayPacketListener {
 
-    fun beforePacketBound(packet: BedrockPacket): Boolean
+    fun beforePacketBound(packet: BedrockPacket, isServerBound: Boolean): Boolean
 
     fun afterPacketBound(packet: BedrockPacket) {}
 
     override fun beforeClientBound(packet: BedrockPacket): Boolean {
-        return beforePacketBound(packet)
+        return beforePacketBound(packet, false)
     }
 
     override fun beforeServerBound(packet: BedrockPacket): Boolean {
-        return beforePacketBound(packet)
+        return beforePacketBound(packet, true)
     }
 
     override fun afterClientBound(packet: BedrockPacket) {

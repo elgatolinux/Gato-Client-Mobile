@@ -55,6 +55,8 @@ class Plus999AuraModule : Module("+999aura", ModuleCategory.Combat) {
 
     private val targetModes = listOf(Mode("Single", 0), Mode("Multi", 1))
     private val rotationModes = listOf(
+        Mode("Ragnarok", 10), Mode("Fenrir", 11), Mode("Eclipse", 12),
+        Mode("Valhalla", 13), Mode("Berserk", 14), Mode("Score", 15), Mode("Legion", 16),
         Mode("Unified", 9), Mode("None", 0), Mode("Silent", 1), Mode("Strafe", 2), Mode("FrontStrafe", 3),
         Mode("AirHvH Pro", 4), Mode("Adaptive", 5), Mode("Apex", 6), Mode("Spectre", 7), Mode("Aegis", 8)
     )
@@ -254,6 +256,14 @@ class Plus999AuraModule : Module("+999aura", ModuleCategory.Combat) {
     private val targetMode get() = (targetModeItem as Mode).idx
     private val rotationMode get() = (rotationItem as Mode).idx
     private val switchMode get() = (switchItem as Mode).idx
+
+    fun cycleRotMode(): String {
+        val currentIdx = rotationModes.indexOfFirst { it == rotationItem }.coerceAtLeast(0)
+        val next = rotationModes[(currentIdx + 1) % rotationModes.size]
+        rotationItem = next
+        resetPerTargetState()
+        return next.name
+    }
 
     // ===== runtime state =====
     private val targets = ArrayList<Entity>()
@@ -585,6 +595,7 @@ class Plus999AuraModule : Module("+999aura", ModuleCategory.Combat) {
                 7 -> rotSpectre(snap)
                 8 -> rotAegis(snap)
                 9 -> rotUnified(snap)
+                10, 11, 12, 13, 14, 15, 16 -> rotGatoAuraX(snap, rotationMode)
                 else -> {} // None/Silent: base aim only
             }
         }.onFailure {
@@ -1059,6 +1070,37 @@ class Plus999AuraModule : Module("+999aura", ModuleCategory.Combat) {
             GatoAuraXRots.Target(tgt.posX, tgt.posY, tgt.posZ, tgt.velX, tgt.velY, tgt.velZ, tgt.yaw, tgt.width, tgt.height),
             env
         )
+        rotOut[0] = ctx.rotPitch
+        rotOut[1] = ctx.rotYaw
+        rotCtx[0] = ctx.rotPitch
+        rotCtx[1] = ctx.rotYaw
+    }
+
+    private fun rotGatoAuraX(tgt: TData, modeIdx: Int) {
+        val localPlayer = session.localPlayer
+        val ctx = GatoAuraXRots.Ctx(50f, 0.9f, 8f, 1f, 3f, 0.7f, 1.5f, 0.1f, 0.1f, 8, 20, true, vertOffset)
+        ctx.rotPitch = rotCtx[0]
+        ctx.rotYaw = rotCtx[1]
+        val env = GatoAuraXRots.Env(
+            localPlayer.posX, localPlayer.posY, localPlayer.posZ,
+            localPlayer.motionX, localPlayer.motionY, localPlayer.motionZ,
+            lastInput.contains(PlayerAuthInputData.UP),
+            lastInput.contains(PlayerAuthInputData.LEFT),
+            lastInput.contains(PlayerAuthInputData.DOWN),
+            lastInput.contains(PlayerAuthInputData.RIGHT),
+            lastInput.contains(PlayerAuthInputData.JUMPING),
+            gameTimeSec()
+        )
+        val snap = GatoAuraXRots.Target(tgt.posX, tgt.posY, tgt.posZ, tgt.velX, tgt.velY, tgt.velZ, tgt.yaw, tgt.width, tgt.height)
+        when (modeIdx) {
+            10 -> GatoAuraXRots.ragnarok(ctx, snap, env)
+            11 -> GatoAuraXRots.fenrir(ctx, snap, env)
+            12 -> GatoAuraXRots.eclipse(ctx, snap, env)
+            13 -> GatoAuraXRots.valhalla(ctx, snap, env)
+            14 -> GatoAuraXRots.berserk(ctx, snap, env)
+            15 -> GatoAuraXRots.score(ctx, snap, env)
+            16 -> GatoAuraXRots.legion(ctx, snap, env)
+        }
         rotOut[0] = ctx.rotPitch
         rotOut[1] = ctx.rotYaw
         rotCtx[0] = ctx.rotPitch

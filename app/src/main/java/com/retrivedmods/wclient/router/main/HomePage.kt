@@ -461,6 +461,27 @@ private fun GameCard() {
                 Icon(Icons.Rounded.Settings, contentDescription = null, tint = WColors.Accent, modifier = Modifier.size(22.dp))
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                GameFeatureItem(
+                    icon = Icons.Rounded.Speed,
+                    title = "Target Server",
+                    description = "${captureModeModel.serverHostName}:${captureModeModel.serverPort}"
+                )
+                GameFeatureItem(
+                    icon = Icons.Rounded.Extension,
+                    title = "Active Modules",
+                    description = "${com.retrivedmods.wclient.game.ModuleManager.modules.count { it.isEnabled && !it.private }} enabled"
+                )
+                GameFeatureItem(
+                    icon = Icons.Rounded.Security,
+                    title = "Account",
+                    description = com.retrivedmods.wclient.game.AccountManager.selectedAccount?.mcChain?.displayName ?: "Offline Mode"
+                )
+            }
+
 
         }
     }

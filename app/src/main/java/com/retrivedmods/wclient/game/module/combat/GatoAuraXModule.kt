@@ -41,6 +41,8 @@ class GatoAuraXModule : Module("GatoAuraX", ModuleCategory.Combat) {
 
     private val targetModes = listOf(Mode("Single", 0), Mode("Multi", 1))
     private val rotationModes = listOf(
+        Mode("Ragnarok", 18), Mode("Fenrir", 19), Mode("Eclipse", 20),
+        Mode("Valhalla", 16), Mode("Berserk", 17), Mode("Score", 14), Mode("Legion", 15),
         Mode("Unified", 13), Mode("None", 0), Mode("Smooth", 1), Mode("Nemesis", 2), Mode("Strafe", 3),
         Mode("Vortex", 4), Mode("FrontStrafe", 5), Mode("AirHvH Pro", 6), Mode("FrontsX", 7),
         Mode("Astral", 8), Mode("Atomic", 9), Mode("Syntax", 10), Mode("Cortex", 11), Mode("Alpha", 12)
@@ -68,6 +70,16 @@ class GatoAuraXModule : Module("GatoAuraX", ModuleCategory.Combat) {
     private val targetMode get() = (targetModeItem as Mode).idx
     private val rotationMode get() = (rotationItem as Mode).idx
     private val switchMode get() = (switchItem as Mode).idx
+
+    fun cycleRotMode(): String {
+        val currentIdx = rotationModes.indexOfFirst { it == rotationItem }.coerceAtLeast(0)
+        val next = rotationModes[(currentIdx + 1) % rotationModes.size]
+        rotationItem = next
+        targets.clear()
+        tickCtr = 0
+        GatoAuraXRots.resetState()
+        return next.name
+    }
 
     // runtime state
     private val targets = ArrayList<Entity>()
@@ -244,7 +256,7 @@ class GatoAuraXModule : Module("GatoAuraX", ModuleCategory.Combat) {
         while (fyaw < -180f) fyaw += 360f
 
         val m = rotationMode
-        if (m != 3 && m > 0 && m <= 13) {
+        if (m != 3 && m > 0) {
             rotOut[0] = fpitch
             rotOut[1] = fyaw
             headYawOut = fyaw
@@ -300,6 +312,13 @@ class GatoAuraXModule : Module("GatoAuraX", ModuleCategory.Combat) {
                     11 -> GatoAuraXRots.cortex(ctx, snap, env)
                     12 -> GatoAuraXRots.alpha(ctx, snap, env)
                     13 -> GatoAuraXRots.unified(ctx, snap, env)
+                    14 -> GatoAuraXRots.score(ctx, snap, env)
+                    15 -> GatoAuraXRots.legion(ctx, snap, env)
+                    16 -> GatoAuraXRots.valhalla(ctx, snap, env)
+                    17 -> GatoAuraXRots.berserk(ctx, snap, env)
+                    18 -> GatoAuraXRots.ragnarok(ctx, snap, env)
+                    19 -> GatoAuraXRots.fenrir(ctx, snap, env)
+                    20 -> GatoAuraXRots.eclipse(ctx, snap, env)
                 }
             }
         }
@@ -308,7 +327,7 @@ class GatoAuraXModule : Module("GatoAuraX", ModuleCategory.Combat) {
         rotOut[1] = ctx.rotYaw
         headYawOut = ctx.headYaw
 
-        dbg("atacando ${targets.size} objetivo(s), rot=${rotationModes[rotationMode].name}")
+        dbg("atacando ${targets.size} objetivo(s), rot=${(rotationItem as Mode).name}")
 
         if (targetMode == 0) {
             attackTarget(targets[0])

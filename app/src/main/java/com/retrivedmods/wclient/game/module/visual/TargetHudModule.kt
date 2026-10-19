@@ -79,10 +79,12 @@ class TargetHudModule : Module("targethud", ModuleCategory.Visual) {
             val skinData = if (closestEntity is Player) {
                 session.level.playerMap[closestEntity.uuid]?.skin
             } else null
+            val hurtTicks = (closestEntity.metadata[org.cloudburstmc.protocol.bedrock.data.entity.EntityDataTypes.HURT_TICKS] as? Int)?.toFloat() ?: 0f
 
             scope.launch {
                 try {
-                    TargetHudOverlay.showTargetHud(username, skinData, distance, maxDistance, 0f)
+                    updateOverlaySettings()
+                    TargetHudOverlay.showTargetHud(username, skinData, distance, maxDistance, hurtTicks)
                 } catch (_: Exception) {
                 }
             }

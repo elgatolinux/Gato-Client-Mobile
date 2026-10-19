@@ -70,8 +70,10 @@ class WaterMarkModule : Module("watermark", ModuleCategory.Misc) {
     }
 
     enum class WatermarkMode {
-        RGB
-
+        RGB,
+        GLOW,
+        SAKURA_PILL,
+        CYBER_HUD
     }
 
     enum class FontStyle {

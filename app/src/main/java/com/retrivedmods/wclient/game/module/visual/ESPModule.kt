@@ -9,16 +9,16 @@ import com.retrivedmods.wclient.game.entity.Entity
 import com.retrivedmods.wclient.game.entity.LocalPlayer
 import com.retrivedmods.wclient.game.entity.Player
 import com.retrivedmods.wclient.render.RenderOverlayView
+import com.retrivedmods.wclient.render.WorldProjection
+import com.retrivedmods.wclient.render.WorldRenderer
 import org.cloudburstmc.math.matrix.Matrix4f
 import org.cloudburstmc.math.vector.Vector2f
 import org.cloudburstmc.math.vector.Vector3f
 import org.cloudburstmc.protocol.bedrock.data.inventory.ItemData
 import org.cloudburstmc.protocol.bedrock.packet.MobArmorEquipmentPacket
 import org.cloudburstmc.protocol.bedrock.packet.MobEquipmentPacket
-import kotlin.math.cos
-import kotlin.math.sin
 
-class ESPModule : Module("esp", ModuleCategory.Visual) {
+class ESPModule : Module("esp", ModuleCategory.Visual), WorldRenderer {
 
     companion object {
         private var renderView: RenderOverlayView? = null
@@ -96,7 +96,7 @@ class ESPModule : Module("esp", ModuleCategory.Visual) {
     }
 
 
-    fun render(canvas: Canvas) {
+    override fun render(canvas: Canvas) {
         if (!isEnabled || !isSessionCreated) return
 
         val localPlayer = session.localPlayer
@@ -118,17 +118,7 @@ class ESPModule : Module("esp", ModuleCategory.Visual) {
 
         if (filteredEntities.isEmpty()) return
 
-        val viewProj = Matrix4f.createPerspective(
-            fov,
-            canvas.width.toFloat() / canvas.height,
-            0.1f,
-            128f
-        ).mul(
-            Matrix4f.createTranslation(localPlayer.vec3Position)
-                .mul(rotateY(-localPlayer.rotationYaw - 180f))
-                .mul(rotateX(-localPlayer.rotationPitch))
-                .invert()
-        )
+        val viewProj = WorldProjection.viewProjection(localPlayer, fov, canvas.width, canvas.height)
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -152,7 +142,7 @@ class ESPModule : Module("esp", ModuleCategory.Visual) {
     ) {
         val vertices = getEntityBoxVertices(entity)
         val screenPoints = vertices.mapNotNull {
-            worldToScreen(it, matrix, canvas.width, canvas.height)
+            WorldProjection.worldToScreen(it, matrix, canvas.width, canvas.height)
         }
 
         if (screenPoints.size < 8) return
@@ -580,42 +570,6 @@ class ESPModule : Module("esp", ModuleCategory.Visual) {
             Vector3f.from(p.x - hw, p.y + h, p.z + hw)
         )
     }
-
-    private fun worldToScreen(
-        pos: Vector3f,
-        m: Matrix4f,
-        w: Int,
-        h: Int
-    ): Vector2f? {
-        val rw = m.get(3, 0) * pos.x + m.get(3, 1) * pos.y + m.get(3, 2) * pos.z + m.get(3, 3)
-        if (rw <= 0.01f) return null
-
-        val inv = 1f / rw
-        val x = w / 2f + (m.get(0, 0) * pos.x + m.get(0, 1) * pos.y + m.get(0, 2) * pos.z + m.get(0, 3)) * inv * w / 2f
-        val y = h / 2f - (m.get(1, 0) * pos.x + m.get(1, 1) * pos.y + m.get(1, 2) * pos.z + m.get(1, 3)) * inv * h / 2f
-        return Vector2f.from(x, y)
-    }
-
-    private fun rotateX(a: Float): Matrix4f {
-        val r = Math.toRadians(a.toDouble())
-        return Matrix4f.from(
-            1f, 0f, 0f, 0f,
-            0f, cos(r).toFloat(), -sin(r).toFloat(), 0f,
-            0f, sin(r).toFloat(), cos(r).toFloat(), 0f,
-            0f, 0f, 0f, 1f
-        )
-    }
-
-    private fun rotateY(a: Float): Matrix4f {
-        val r = Math.toRadians(a.toDouble())
-        return Matrix4f.from(
-            cos(r).toFloat(), 0f, sin(r).toFloat(), 0f,
-            0f, 1f, 0f, 0f,
-            -sin(r).toFloat(), 0f, cos(r).toFloat(), 0f,
-            0f, 0f, 0f, 1f
-        )
-    }
-
 
     private fun drawCornerBox(c: Canvas, p: Paint, minX: Float, minY: Float, maxX: Float, maxY: Float) {
         val len = (maxX - minX) / 4
